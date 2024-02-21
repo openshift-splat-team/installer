@@ -2291,9 +2291,7 @@ spec:
                     description: PublicIpv4Pool is an optional field that can be used
                       to tell the installation process to use Public IPv4 address
                       that you bring to your AWS account with BYOIP.
-                    items:
-                      type: string
-                    type: array
+                    type: string
                   region:
                     description: Region specifies the AWS region where the cluster
                       will be created.

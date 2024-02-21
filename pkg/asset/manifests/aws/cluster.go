@@ -35,6 +35,9 @@ func GenerateClusterAssets(installConfig *installconfig.InstallConfig, clusterID
 		},
 		Spec: capa.AWSClusterSpec{
 			Region: installConfig.Config.AWS.Region,
+			AdditionalTags: capa.Tags{
+				fmt.Sprintf("kubernetes.io/cluster/%s", clusterID.InfraID): "owned",
+			},
 			NetworkSpec: capa.NetworkSpec{
 				VPC: capa.VPCSpec{
 					CidrBlock:                  mainCIDR.String(),
@@ -201,17 +204,23 @@ func GenerateClusterAssets(installConfig *installconfig.InstallConfig, clusterID
 		awsCluster.Spec.NetworkSpec.VPC = capa.VPCSpec{
 			ID: vpc,
 		}
-	} else {
-		subnetMappings := []capa.AWSSubnetMapping{}
-		// TO-DO: we are just using a slice allocation IDs for now. as they are used, they are removed from the slice.
-		if len(platformSpec.PublicIpv4Pool) > 0 {
-			for _, allocationId := range platformSpec.PublicIpv4Pool {
-				subnetMappings = append(subnetMappings, capa.AWSSubnetMapping{
-					AllocationID: allocationId,
-				})
-			}
-			awsCluster.Spec.ControlPlaneLoadBalancer.SubnetMappings = subnetMappings
-		}
+	}
+	//  else {
+	// 	subnetMappings := []capa.AWSSubnetMapping{}
+	// 	// TO-DO: we are just using a slice allocation IDs for now. as they are used, they are removed from the slice.
+	// 	if len(platformSpec.PublicIpv4Pool) > 0 {
+	// 		for _, allocationId := range platformSpec.PublicIpv4Pool {
+	// 			subnetMappings = append(subnetMappings, capa.AWSSubnetMapping{
+	// 				AllocationID: allocationId,
+	// 			})
+	// 		}
+	// 		awsCluster.Spec.ControlPlaneLoadBalancer.SubnetMappings = subnetMappings
+	// 	}
+	// }
+	// Installing in BYO IP
+	fmt.Printf(">>>>>>>>>> PublicIpv4Pool: %s", platformSpec.PublicIpv4Pool)
+	if platformSpec.PublicIpv4Pool != "" {
+		awsCluster.Spec.ControlPlaneLoadBalancer.PublicIpv4Pool = &platformSpec.PublicIpv4Pool
 	}
 
 	manifests = append(manifests, &asset.RuntimeFile{

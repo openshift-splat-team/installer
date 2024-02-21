@@ -222,6 +222,10 @@ type AWSLoadBalancerSpec struct {
 	// the subnet. For internet-facing load balancer, you can specify one IPv6 address
 	// per subnet.
 	// SubnetMappings []AWSSubnetMapping `json:"subnetMappings,omitempty"`
+
+	// PublicIpv4Pool is an optional field that can be used to tell the installation process to use
+	// Public IPv4 address that you bring to your AWS account with BYOIP.
+	// +optional
 	PublicIpv4Pool *string `json:"publicIpv4Pool,omitempty"`
 
 	// HealthCheckProtocol sets the protocol type for ELB health check target

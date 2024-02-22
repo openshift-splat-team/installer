@@ -651,6 +651,10 @@ spec:
                   resources managed by the AWS provider, in addition to the ones added
                   by default.
                 type: object
+              publicIpv4Pool:
+                default: ""
+                description: Custom Public Pool
+                type: string
               bastion:
                 description: Bastion contains options to configure the bastion host.
                 properties:
@@ -739,6 +743,10 @@ spec:
                     enum:
                     - internet-facing
                     - internal
+                    type: string
+                  publicIpv4Pool:
+                    default: ""
+                    description: Custom Public Pool
                     type: string
                   subnetMappings:
                     description: "The IDs of the public subnets. You can specify only
@@ -1735,6 +1743,10 @@ spec:
                     - internet-facing
                     - internal
                     type: string
+                  publicIpv4Pool:
+                    default: ""
+                    description: Custom Public Pool
+                    type: string
                   subnetMappings:
                     description: "The IDs of the public subnets. You can specify only
                       one subnet per Availability Zone. You must specify either subnets
@@ -1769,6 +1781,10 @@ spec:
                       type: string
                     type: array
                 type: object
+              publicIpv4Pool:
+                default: ""
+                description: Custom Public Pool
+                type: string
               identityRef:
                 description: IdentityRef is a reference to a identity to be used when
                   reconciling this cluster
@@ -7918,6 +7934,10 @@ spec:
                       type: object
                     type: array
                 type: object
+              publicIpv4Pool:
+                default: ""
+                description: Custom Public Pool
+                type: string
               identityRef:
                 description: IdentityRef is a reference to a identity to be used when
                   reconciling the managed control plane.

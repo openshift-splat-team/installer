@@ -4484,6 +4484,11 @@ type CreateLoadBalancerInput struct {
 	// Zones. You cannot specify Elastic IP addresses for your subnets.
 	SubnetMappings []*SubnetMapping `type:"list"`
 
+	// PublicIpv4Pool is an optional field that can be used to tell the installation process to use
+	// Public IPv4 address that you bring to your AWS account with BYOIP.
+	// +optional
+	PublicIpv4Pool *string `json:"publicIpv4Pool,omitempty"`
+
 	// The IDs of the public subnets. You can specify only one subnet per Availability
 	// Zone. You must specify either subnets or subnet mappings, but not both. To
 	// specify an Elastic IP address, specify subnet mappings instead of subnets.
@@ -9176,6 +9181,11 @@ type SetSubnetsInput struct {
 	// the subnet. For internet-facing load balancer, you can specify one IPv6 address
 	// per subnet.
 	SubnetMappings []*SubnetMapping `type:"list"`
+
+	// PublicIpv4Pool is an optional field that can be used to tell the installation process to use
+	// Public IPv4 address that you bring to your AWS account with BYOIP.
+	// +optional
+	PublicIpv4Pool *string `json:"publicIpv4Pool,omitempty"`
 
 	// The IDs of the public subnets. You can specify only one subnet per Availability
 	// Zone. You must specify either subnets or subnet mappings.

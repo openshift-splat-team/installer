@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -165,7 +166,9 @@ func GenerateClusterAssets(installConfig *installconfig.InstallConfig, clusterID
 						Protocol: capa.ELBProtocolTCP,
 					},
 				},
+				PublicIpv4Pool: &platformSpec.PublicIpv4Pool,
 			},
+			PublicIpv4Pool: platformSpec.PublicIpv4Pool,
 		},
 	}
 
@@ -218,10 +221,12 @@ func GenerateClusterAssets(installConfig *installconfig.InstallConfig, clusterID
 	// 	}
 	// }
 	// Installing in BYO IP
-	fmt.Printf(">>>>>>>>>> PublicIpv4Pool: %s", platformSpec.PublicIpv4Pool)
-	if platformSpec.PublicIpv4Pool != "" {
-		awsCluster.Spec.ControlPlaneLoadBalancer.PublicIpv4Pool = &platformSpec.PublicIpv4Pool
-	}
+	// fmt.Printf(">>>>>>>>>> PublicIpv4Pool: %s", platformSpec.PublicIpv4Pool)
+	// // if platformSpec.PublicIpv4Pool != "" {
+
+	// // }
+	// awsCluster.Spec.ControlPlaneLoadBalancer.PublicIpv4Pool = &platformSpec.PublicIpv4Pool
+	// awsCluster.Spec.PublicIpv4Pool = platformSpec.PublicIpv4Pool
 
 	manifests = append(manifests, &asset.RuntimeFile{
 		Object: awsCluster,
@@ -244,6 +249,8 @@ func GenerateClusterAssets(installConfig *installconfig.InstallConfig, clusterID
 		File:   asset.File{Filename: "01_aws-cluster-controller-identity-default.yaml"},
 	})
 
+	fmt.Println(awsCluster)
+	spew.Printf("\n\n>>>> CLUSTER\n %s\n\n\n", awsCluster)
 	return &capiutils.GenerateClusterAssetsOutput{
 		Manifests: manifests,
 		InfrastructureRef: &corev1.ObjectReference{

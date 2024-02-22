@@ -165,12 +165,12 @@ var (
 	LoadBalancerTypeNLB     = LoadBalancerType("nlb")
 )
 
-// // AWSSubnetMapping associates an allocation ID with a subnet for consumption by services which
-// // can consume an allocation ID.
-// type AWSSubnetMapping struct {
-// 	AllocationID string `json:"allocationID,omitempty"`
-// 	SubnetID     string `json:"subnetID,omitempty"`
-// }
+// AWSSubnetMapping associates an allocation ID with a subnet for consumption by services which
+// can consume an allocation ID.
+type AWSSubnetMapping struct {
+	AllocationID string `json:"allocationID,omitempty"`
+	SubnetID     string `json:"subnetID,omitempty"`
+}
 
 // AWSLoadBalancerSpec defines the desired state of an AWS load balancer.
 type AWSLoadBalancerSpec struct {
@@ -221,7 +221,7 @@ type AWSLoadBalancerSpec struct {
 	// you can specify one private IP address per subnet from the IPv4 range of
 	// the subnet. For internet-facing load balancer, you can specify one IPv6 address
 	// per subnet.
-	// SubnetMappings []AWSSubnetMaping `json:"subnetMappings,omitempty"`
+	SubnetMappings []AWSSubnetMapping `json:"subnetMappings,omitempty"`
 
 	// PublicIpv4Pool is an optional field that can be used to tell the installation process to use
 	// Public IPv4 address that you bring to your AWS account with BYOIP.

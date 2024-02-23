@@ -102,16 +102,52 @@ type Platform struct {
 	// +optional
 	LBType configv1.AWSLBType `json:"lbType,omitempty"`
 
-
 	// PublicIpv4Pool is an optional field that can be used to tell the installation process to use
 	// Public IPv4 address that you bring to your AWS account with BYOIP.
 	// +optional
 	PublicIpv4Pool string `json:"publicIpv4Pool,omitempty"`
 
+	// ElasticIps is an optional field that can be used to tell the installation process to use
+	// Elastic IP address that had been previously created to assign to the resources with Public IPv4
+	// address created by installer.
+	// +optional
+	ElasticIps []string `json:"elasticIps,omitempty"`
+
 	// PreserveBootstrapIgnition is an optional field that can be used to make the S3 deletion optional
 	// during bootstrap destroy.
 	// +optional
 	PreserveBootstrapIgnition bool `json:"preserveBootstrapIgnition,omitempty"`
+
+	// Ec2 is an optional field that can be used to tell the installation process to use
+	// Elastic IP address that had been previously created to assign to the resources with Public IPv4
+	// address created by installer.
+	// +optional
+	Ec2 *Ec2 `json:"ec2,omitempty"`
+}
+
+// Ec2 store the configuration for services to
+// override existing defaults of AWS Services.
+type Ec2 struct {
+	// ElasticIp is an optional field that can be used to tell the installation process to use
+	// Elastic IP address that had been previously created to assign to the resources with Public IPv4
+	// address created by installer.
+	// +optional
+	ElasticIp *Ec2ElasticIp `json:"elasticIp,omitempty"`
+}
+
+// Ec2ElasticIp store the configuration for services to
+// override existing defaults of AWS Services.
+type Ec2ElasticIp struct {
+	// PublicIpv4Pool is an optional field that can be used to tell the installation process to use
+	// Public IPv4 address that you bring to your AWS account with BYOIP.
+	// +optional
+	PublicIpv4Pool string `json:"publicIpv4Pool,omitempty"`
+
+	// ElasticIps is an optional field that can be used to tell the installation process to use
+	// Elastic IP address that had been previously created to assign to the resources with Public IPv4
+	// address created by installer.
+	// +optional
+	AllocatedIps []string `json:"allocatedIps,omitempty"`
 }
 
 // ServiceEndpoint store the configuration for services to

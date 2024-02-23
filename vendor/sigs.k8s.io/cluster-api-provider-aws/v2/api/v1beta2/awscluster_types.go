@@ -60,6 +60,11 @@ type AWSClusterSpec struct {
 	// +optional
 	ControlPlaneLoadBalancer *AWSLoadBalancerSpec `json:"controlPlaneLoadBalancer,omitempty"`
 
+	// PublicIpv4Pool is an optional field that can be used to tell the installation process to use
+	// Public IPv4 address that you bring to your AWS account with BYOIP.
+	// +optional
+	PublicIpv4Pool string `json:"publicIpv4Pool,omitempty"`
+
 	// ImageLookupFormat is the AMI naming format to look up machine images when
 	// a machine does not specify an AMI. When set, this will be used for all
 	// cluster machines unless a machine specifies a different ImageLookupOrg.
@@ -101,6 +106,37 @@ type AWSClusterSpec struct {
 	// BootstrapFormatIgnition feature flag to be enabled).
 	// +optional
 	S3Bucket *S3Bucket `json:"s3Bucket,omitempty"`
+
+	// Ec2 is an optional field that can be used to tell the installation process to use
+	// Elastic IP address that had been previously created to assign to the resources with Public IPv4
+	// address created by installer.
+	// +optional
+	Ec2 *Ec2 `json:"ec2,omitempty"`
+}
+
+// ServiceEndpoint store the configuration for services to
+// override existing defaults of AWS Services.
+type Ec2 struct {
+	// ElasticIp is an optional field that can be used to tell the installation process to use
+	// Elastic IP address that had been previously created to assign to the resources with Public IPv4
+	// address created by installer.
+	// +optional
+	ElasticIp *Ec2ElasticIp `json:"elasticIp,omitempty"`
+}
+
+// Ec2ElasticIp store the configuration for services to
+// override existing defaults of AWS Services.
+type Ec2ElasticIp struct {
+	// PublicIpv4Pool is an optional field that can be used to tell the installation process to use
+	// Public IPv4 address that you bring to your AWS account with BYOIP.
+	// +optional
+	PublicIpv4Pool string `json:"publicIpv4Pool,omitempty"`
+
+	// ElasticIps is an optional field that can be used to tell the installation process to use
+	// Elastic IP address that had been previously created to assign to the resources with Public IPv4
+	// address created by installer.
+	// +optional
+	AllocatedIps []string `json:"allocatedIps,omitempty"`
 }
 
 // AWSIdentityKind defines allowed AWS identity types.
@@ -172,7 +208,6 @@ type AWSSubnetMapping struct {
 	SubnetID     string `json:"subnetID,omitempty"`
 }
 
-
 // AWSLoadBalancerSpec defines the desired state of an AWS load balancer.
 type AWSLoadBalancerSpec struct {
 	// Name sets the name of the classic ELB load balancer. As per AWS, the name must be unique
@@ -222,8 +257,13 @@ type AWSLoadBalancerSpec struct {
 	// you can specify one private IP address per subnet from the IPv4 range of
 	// the subnet. For internet-facing load balancer, you can specify one IPv6 address
 	// per subnet.
-	SubnetMappings []AWSSubnetMapping `json:"subnetMappings,list"`
-	
+	SubnetMappings []AWSSubnetMapping `json:"subnetMappings,omitempty"`
+
+	// PublicIpv4Pool is an optional field that can be used to tell the installation process to use
+	// Public IPv4 address that you bring to your AWS account with BYOIP.
+	// +optional
+	PublicIpv4Pool string `json:"publicIpv4Pool,omitempty"`
+
 	// HealthCheckProtocol sets the protocol type for ELB health check target
 	// default value is ELBProtocolSSL
 	// +kubebuilder:validation:Enum=TCP;SSL;HTTP;HTTPS;TLS;UDP

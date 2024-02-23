@@ -202,15 +202,33 @@ func GenerateClusterAssets(installConfig *installconfig.InstallConfig, clusterID
 			ID: vpc,
 		}
 	} else {
-		subnetMappings := []capa.AWSSubnetMapping{}
-		// TO-DO: we are just using a slice allocation IDs for now. as they are used, they are removed from the slice.
-		if len(platformSpec.PublicIpv4Pool) > 0 {
-			for _, allocationId := range platformSpec.PublicIpv4Pool {
-				subnetMappings = append(subnetMappings, capa.AWSSubnetMapping{
+		// TODO: add PublicIpv4Pool support; OR use ElasticIPs
+		// Allocating ElasticIPs:
+		// Q: Can we support in BYOVPC deployments?
+		// TODO: add validations
+		if len(platformSpec.ElasticIps) > 0 {
+			// Allocating ElasticIPs for Control Plane Load Balancer
+			awsCluster.Spec.ControlPlaneLoadBalancer.SubnetMappings = []capa.AWSSubnetMapping{}
+			for _, allocationId := range platformSpec.ElasticIps {
+				awsCluster.Spec.ControlPlaneLoadBalancer.SubnetMappings = append(awsCluster.Spec.ControlPlaneLoadBalancer.SubnetMappings, capa.AWSSubnetMapping{
 					AllocationID: string(allocationId),
 				})
 			}
-			awsCluster.Spec.ControlPlaneLoadBalancer.SubnetMappings = subnetMappings
+			// TODO: add Nat Gateway EIP mapping/allocation
+			// TODO: add bootstrap node
+		}
+		if platformSpec.PublicIpv4Pool != "" {
+			awsCluster.Spec.ControlPlaneLoadBalancer.PublicIpv4Pool = platformSpec.PublicIpv4Pool
+			awsCluster.Spec.PublicIpv4Pool = platformSpec.PublicIpv4Pool
+		}
+	}
+	if platformSpec.Ec2 != nil {
+		awsCluster.Spec.Ec2 = &capa.Ec2{}
+		if platformSpec.Ec2.ElasticIp != nil {
+			awsCluster.Spec.Ec2.ElasticIp = &capa.Ec2ElasticIp{
+				AllocatedIps:   platformSpec.Ec2.ElasticIp.AllocatedIps,
+				PublicIpv4Pool: platformSpec.Ec2.ElasticIp.PublicIpv4Pool,
+			}
 		}
 	}
 

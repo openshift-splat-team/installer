@@ -9191,6 +9191,7 @@ type SetSubnetsInput struct {
 	// [Network Load Balancers] You can specify subnets from one or more Availability
 	// Zones.
 	Subnets []*string `type:"list"`
+
 }
 
 // String returns the string representation.

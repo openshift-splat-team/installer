@@ -2247,7 +2247,7 @@ spec:
                       been previously created to assign to the resources with Public
                       IPv4 address created by installer.
                     properties:
-                      elasticIps:
+                      elasticIp:
                         description: ElasticIp is an optional field that can be used
                           to tell the installation process to use Elastic IP address
                           that had been previously created to assign to the resources
@@ -2270,14 +2270,6 @@ spec:
                             type: string
                         type: object
                     type: object
-                  elasticIps:
-                    description: ElasticIps is an optional field that can be used
-                      to tell the installation process to use Elastic IP address that
-                      had been previously created to assign to the resources with
-                      Public IPv4 address created by installer.
-                    items:
-                      type: string
-                    type: array
                   experimentalPropagateUserTags:
                     description: The field is deprecated. ExperimentalPropagateUserTags
                       is an experimental flag that directs in-cluster operators to
@@ -2324,11 +2316,6 @@ spec:
                       operators to include the specified user tags in the tags of
                       the AWS resources that the operators create.
                     type: boolean
-                  publicIpv4Pool:
-                    description: PublicIpv4Pool is an optional field that can be used
-                      to tell the installation process to use Public IPv4 address
-                      that you bring to your AWS account with BYOIP.
-                    type: string
                   region:
                     description: Region specifies the AWS region where the cluster
                       will be created.

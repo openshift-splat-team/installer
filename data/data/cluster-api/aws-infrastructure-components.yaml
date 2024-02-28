@@ -740,10 +740,22 @@ spec:
                     - internet-facing
                     - internal
                     type: string
-                  publicIpv4Pool:
-                    default: ""
-                    description: Custom Public Pool
-                    type: string
+                  # publicIpv4Pool:
+                  #   default: ""
+                  #   description: Custom Public Pool
+                  #   type: string
+                  elasticIp:
+                    items:
+                      description: AWSSubnetMapping associates an allocation ID with
+                        a subnet for consumption by services which can consume an
+                        allocation ID.
+                      properties:
+                        allocatedIps:
+                          type: string
+                        publicIpv4Pool:
+                          type: string
+                      type: object
+                    type: object
                   subnetMappings:
                     description: "The IDs of the public subnets. You can specify only
                       one subnet per Availability Zone. You must specify either subnets
@@ -1739,10 +1751,24 @@ spec:
                     - internet-facing
                     - internal
                     type: string
-                  publicIpv4Pool:
-                    default: ""
-                    description: Custom Public Pool
-                    type: string
+                  # publicIpv4Pool:
+                  #   default: ""
+                  #   description: Custom Public Pool
+                  #   type: string
+                  elasticIp:
+                    description: ec2 elastic ip resources.
+                    properties:
+                      publicIpv4Pool:
+                        default: ""
+                        description: Custom Public Public Ipv4 Pool
+                        type: string
+                      allocatedIps:
+                        description: provisioned elastic Ips to be consumed for the cluster
+                          creation.
+                        items:
+                          type: string
+                        type: array
+                    type: object
                   subnetMappings:
                     description: "The IDs of the public subnets. You can specify only
                       one subnet per Availability Zone. You must specify either subnets
@@ -2119,28 +2145,28 @@ spec:
               region:
                 description: The AWS Region the cluster lives in.
                 type: string
-              publicIpv4Pool:
-                default: ""
-                description: Custom Public Pool
-                type: string
-              ec2:
-                description: ec2 resources.
-                properties:
-                  elasticIp:
-                    description: ec2 elastic ip resources.
-                    properties:
-                      publicIpv4Pool:
-                        default: ""
-                        description: Custom Public Public Ipv4 Pool
-                        type: string
-                      allocatedIps:
-                        description: provisioned elastic Ips to be consumed for the cluster
-                          creation.
-                        items:
-                          type: string
-                        type: array
-                    type: object
-                type: object
+              # publicIpv4Pool:
+              #   default: ""
+              #   description: Custom Public Pool
+              #   type: string
+              # ec2:
+              #   description: ec2 resources.
+              #   properties:
+              #     elasticIp:
+              #       description: ec2 elastic ip resources.
+              #       properties:
+              #         publicIpv4Pool:
+              #           default: ""
+              #           description: Custom Public Public Ipv4 Pool
+              #           type: string
+              #         allocatedIps:
+              #           description: provisioned elastic Ips to be consumed for the cluster
+              #             creation.
+              #           items:
+              #             type: string
+              #           type: array
+              #       type: object
+              #   type: object
               s3Bucket:
                 description: S3Bucket contains options to configure a supporting S3
                   bucket for this cluster - currently used for nodes requiring Ignition
@@ -3246,6 +3272,20 @@ spec:
                             items:
                               type: string
                             type: array
+                          elasticIp:
+                            description: ec2 elastic ip resources.
+                            properties:
+                              publicIpv4Pool:
+                                default: ""
+                                description: Custom Public Public Ipv4 Pool
+                                type: string
+                              allocatedIps:
+                                description: provisioned elastic Ips to be consumed for the cluster
+                                  creation.
+                                items:
+                                  type: string
+                                type: array
+                            type: object
                         type: object
                       identityRef:
                         description: IdentityRef is a reference to a identity to be
@@ -3464,28 +3504,28 @@ spec:
                       region:
                         description: The AWS Region the cluster lives in.
                         type: string
-                      publicIpv4Pool:
-                        default: ""
-                        description: Custom Public Pool
-                        type: string
-                      ec2:
-                        description: ec2 resources.
-                        properties:
-                          elasticIp:
-                            description: ec2 elastic ip resources.
-                            properties:
-                              publicIpv4Pool:
-                                default: ""
-                                description: Custom Public Public Ipv4 Pool
-                                type: string
-                              allocatedIps:
-                                description: provisioned elastic Ips to be consumed for the cluster
-                                  creation.
-                                items:
-                                  type: string
-                                type: array
-                            type: object
-                        type: object
+                      # publicIpv4Pool:
+                      #   default: ""
+                      #   description: Custom Public Pool
+                      #   type: string
+                      # ec2:
+                      #   description: ec2 resources.
+                      #   properties:
+                      #     elasticIp:
+                      #       description: ec2 elastic ip resources.
+                      #       properties:
+                      #         publicIpv4Pool:
+                      #           default: ""
+                      #           description: Custom Public Public Ipv4 Pool
+                      #           type: string
+                      #         allocatedIps:
+                      #           description: provisioned elastic Ips to be consumed for the cluster
+                      #             creation.
+                      #           items:
+                      #             type: string
+                      #           type: array
+                      #       type: object
+                      #   type: object
                       s3Bucket:
                         description: S3Bucket contains options to configure a supporting
                           S3 bucket for this cluster - currently used for nodes requiring
@@ -3821,6 +3861,20 @@ spec:
                             items:
                               type: string
                             type: array
+                          elasticIp:
+                            description: ec2 elastic ip resources.
+                            properties:
+                              publicIpv4Pool:
+                                default: ""
+                                description: Custom Public Public Ipv4 Pool
+                                type: string
+                              allocatedIps:
+                                description: provisioned elastic Ips to be consumed for the cluster
+                                  creation.
+                                items:
+                                  type: string
+                                type: array
+                            type: object
                         type: object
                       identityRef:
                         description: IdentityRef is a reference to a identity to be

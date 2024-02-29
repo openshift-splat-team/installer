@@ -50,13 +50,16 @@ platform:
   aws:
     region: ${REGION}
     publicIpv4Pool: ${PUBLIC_IPV4_POOL_ID}
-    ElasticIps:
-    - eipalloc-0289332101bdacca1
     ec2:
       elasticIp:
         publicIpv4Pool: ${PUBLIC_IPV4_POOL_ID}
         allocatedIps:
-        - eipalloc-0289332101bdacca1
+        - eipalloc-0058818ab62e494fe
+        - eipalloc-0a043af2ea479afc6
+        - eipalloc-0e24d49b570b18334
+        - eipalloc-088d2f4e6c94f681c
+        - eipalloc-0151e3eeef7b3e7f0
+        - eipalloc-0cc6fbacf986c8945
 publish: External
 pullSecret: '$(cat ${PULL_SECRET_FILE} |awk -v ORS= -v OFS= '{$1=$1}1')'
 sshKey: |
@@ -77,7 +80,7 @@ destroy() {
 }
 
 case $CMD in
-  "create") build; create;;
+  "install") build; install;;
   "build") build;;
   "destroy") destroy;;
   *) echo "Commmand $CMD not found";;

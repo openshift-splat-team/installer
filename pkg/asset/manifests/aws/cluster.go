@@ -35,13 +35,15 @@ func GenerateClusterAssets(installConfig *installconfig.InstallConfig, clusterID
 			Namespace: capiutils.Namespace,
 		},
 		Spec: capa.AWSClusterSpec{
-			Region: installConfig.Config.AWS.Region,
+			Region:         installConfig.Config.AWS.Region,
+			AdditionalTags: capa.Tags{fmt.Sprintf("kubernetes.io/cluster/%s", clusterID): "owned"},
 			NetworkSpec: capa.NetworkSpec{
 				VPC: capa.VPCSpec{
 					CidrBlock:                  mainCIDR.String(),
 					AvailabilityZoneUsageLimit: ptr.To(len(zones)),
 					AvailabilityZoneSelection:  &capa.AZSelectionSchemeOrdered,
 				},
+
 				CNI: &capa.CNISpec{
 					CNIIngressRules: capa.CNIIngressRules{
 						{

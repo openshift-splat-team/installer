@@ -204,8 +204,8 @@ var (
 // AWSSubnetMapping associates an allocation ID with a subnet for consumption by services which
 // can consume an allocation ID.
 type AWSSubnetMapping struct {
-	AllocationID string `json:"allocationID,omitempty"`
-	SubnetID     string `json:"subnetID,omitempty"`
+	AllocationID *string `json:"allocationID,omitempty"`
+	SubnetID     *string `json:"subnetID,omitempty"`
 }
 
 // AWSLoadBalancerSpec defines the desired state of an AWS load balancer.

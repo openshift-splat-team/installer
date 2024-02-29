@@ -50,11 +50,10 @@ platform:
   aws:
     region: ${REGION}
     publicIpv4Pool: ${PUBLIC_IPV4_POOL_ID}
-    ec2:
-      elasticIp:
-        publicIpv4Pool: ${PUBLIC_IPV4_POOL_ID}
-        allocatedIps:
-$(while read -r line; do echo "        - $line"; done </tmp/eip-allocations)
+    elasticIp:
+      publicIpv4Pool: ${PUBLIC_IPV4_POOL_ID}
+      allocatedIps:
+$(while read -r line; do echo "      - $line"; done </tmp/eip-allocations)
 publish: External
 pullSecret: '$(cat ${PULL_SECRET_FILE} |awk -v ORS= -v OFS= '{$1=$1}1')'
 sshKey: |
@@ -71,6 +70,7 @@ EOF
 
 destroy() {
   openshift-install-capa destroy cluster --dir ${INSTALL_DIR} --log-level=debug | tee -a ${INSTALL_DIR}/install.log
+  killall etcd kube-apiserver cluster-api-provider-aws cluster-api || echo 0
 }
 
 case $CMD in

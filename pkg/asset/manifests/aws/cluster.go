@@ -204,45 +204,13 @@ func GenerateClusterAssets(installConfig *installconfig.InstallConfig, clusterID
 			ID: vpc,
 		}
 	}
-	// else {
-	// TODO: add PublicIpv4Pool support; OR use ElasticIPs
-	// Allocating ElasticIPs:
-	// Q: Can we support in BYOVPC deployments?
-	// TODO: add validations
-	// if len(platformSpec.ElasticIps) > 0 {
-	// 	// Allocating ElasticIPs for Control Plane Load Balancer
-	// 	awsCluster.Spec.ControlPlaneLoadBalancer.SubnetMappings = []capa.AWSSubnetMapping{}
-	// 	for _, allocationId := range platformSpec.ElasticIps {
-	// 		awsCluster.Spec.ControlPlaneLoadBalancer.SubnetMappings = append(awsCluster.Spec.ControlPlaneLoadBalancer.SubnetMappings, capa.AWSSubnetMapping{
-	// 			AllocationID: string(allocationId),
-	// 		})
-	// 	}
-	// 	// TODO: add Nat Gateway EIP mapping/allocation
-	// 	// TODO: add bootstrap node
-	// }
-	// 	if platformSpec.PublicIpv4Pool != "" {
-	// 		awsCluster.Spec.ControlPlaneLoadBalancer.PublicIpv4Pool = platformSpec.PublicIpv4Pool
-	// 		awsCluster.Spec.PublicIpv4Pool = platformSpec.PublicIpv4Pool
-	// 	}
-	// }
-	if platformSpec.Ec2.ElasticIp != nil {
-		// awsCluster.Spec.Ec2 = &capa.Ec2{}
-		// if platformSpec.Ec2.ElasticIp != nil {
-		// 	awsCluster.Spec.Ec2.ElasticIp = &capa.Ec2ElasticIp{
-		// 		AllocatedIps:   platformSpec.Ec2.ElasticIp.AllocatedIps,
-		// 		PublicIpv4Pool: platformSpec.Ec2.ElasticIp.PublicIpv4Pool,
-		// 	}
-		// }
-		// awsCluster.Spec.ControlPlaneLoadBalancer.ElasticIp = &capa.Ec2ElasticIp{
-		// 	AllocatedIps:   platformSpec.Ec2.ElasticIp.AllocatedIps,
-		// 	PublicIpv4Pool: platformSpec.Ec2.ElasticIp.PublicIpv4Pool,
-		// }
+	if platformSpec.ElasticIp != nil {
 		awsCluster.Spec.NetworkSpec.ElasticIp = &capa.Ec2ElasticIp{
-			AllocatedIps:   platformSpec.Ec2.ElasticIp.AllocatedIps,
-			PublicIpv4Pool: platformSpec.Ec2.ElasticIp.PublicIpv4Pool,
+			AllocatedIps:   platformSpec.ElasticIp.AllocatedIps,
+			PublicIpv4Pool: platformSpec.ElasticIp.PublicIpv4Pool,
 		}
 	}
-	spew.Printf("createLB -  %v\n", platformSpec.Ec2.ElasticIp)
+	spew.Printf("createLB -  %v\n", platformSpec.ElasticIp)
 	spew.Printf("createLB - %v\n", awsCluster.Spec.ControlPlaneLoadBalancer)
 
 	manifests = append(manifests, &asset.RuntimeFile{

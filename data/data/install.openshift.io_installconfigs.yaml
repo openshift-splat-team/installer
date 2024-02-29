@@ -2241,34 +2241,25 @@ spec:
                           type: string
                         type: array
                     type: object
-                  ec2:
-                    description: Ec2 is an optional field that can be used to tell
-                      the installation process to use Elastic IP address that had
-                      been previously created to assign to the resources with Public
-                      IPv4 address created by installer.
+                  elasticIp:
+                    description: ElasticIp is an optional field that can be used to
+                      tell the installation process to use Elastic IP address that
+                      had been previously created to assign to the resources with
+                      Public IPv4 address created by installer.
                     properties:
-                      elasticIp:
-                        description: ElasticIp is an optional field that can be used
+                      allocatedIps:
+                        description: ElasticIps is an optional field that can be used
                           to tell the installation process to use Elastic IP address
                           that had been previously created to assign to the resources
                           with Public IPv4 address created by installer.
-                        properties:
-                          allocatedIps:
-                            description: ElasticIps is an optional field that can
-                              be used to tell the installation process to use Elastic
-                              IP address that had been previously created to assign
-                              to the resources with Public IPv4 address created by
-                              installer.
-                            items:
-                              type: string
-                            type: array
-                          publicIpv4Pool:
-                            description: PublicIpv4Pool is an optional field that
-                              can be used to tell the installation process to use
-                              Public IPv4 address that you bring to your AWS account
-                              with BYOIP.
-                            type: string
-                        type: object
+                        items:
+                          type: string
+                        type: array
+                      publicIpv4Pool:
+                        description: PublicIpv4Pool is an optional field that can
+                          be used to tell the installation process to use Public IPv4
+                          address that you bring to your AWS account with BYOIP.
+                        type: string
                     type: object
                   experimentalPropagateUserTags:
                     description: The field is deprecated. ExperimentalPropagateUserTags

@@ -245,9 +245,9 @@ type NetworkSpec struct {
 	// +optional
 	AdditionalControlPlaneIngressRules []IngressRule `json:"additionalControlPlaneIngressRules,omitempty"`
 
-	// ElasticIp is an optional field that can be used to tell the installation process to use
-	// Elastic IP address that had been previously created to assign to the resources with Public IPv4
-	// address created by installer.
+	// ElasticIp is an optional field that can be used to tell the provisioner to consume custom
+	// Elastic IP address that had been previously created to assign to the resources created with
+	// Public IPv4 address.
 	// +optional
 	ElasticIp *Ec2ElasticIp `json:"elasticIp,omitempty"`
 }
@@ -720,4 +720,19 @@ func (i *IngressRule) Equals(o *IngressRule) bool {
 	}
 
 	return true
+}
+
+// Ec2ElasticIp store the configuration for services to
+// override existing defaults of AWS Services.
+type Ec2ElasticIp struct {
+	// PublicIpv4Pool is an optional field that can be used to tell the installation process to use
+	// Public IPv4 address that you bring to your AWS account with BYOIP.
+	// +optional
+	PublicIpv4Pool string `json:"publicIpv4Pool,omitempty"`
+
+	// ElasticIps is an optional field that can be used to tell the installation process to use
+	// Elastic IP address that had been previously created to assign to the resources with Public IPv4
+	// address created by installer.
+	// +optional
+	AllocatedIps []string `json:"allocatedIps,omitempty"`
 }

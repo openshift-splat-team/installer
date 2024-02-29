@@ -36,14 +36,13 @@ func GenerateClusterAssets(installConfig *installconfig.InstallConfig, clusterID
 		},
 		Spec: capa.AWSClusterSpec{
 			Region:         installConfig.Config.AWS.Region,
-			AdditionalTags: capa.Tags{fmt.Sprintf("kubernetes.io/cluster/%s", clusterID): "owned"},
+			AdditionalTags: capa.Tags{fmt.Sprintf("kubernetes.io/cluster/%s", clusterID.InfraID): "owned"},
 			NetworkSpec: capa.NetworkSpec{
 				VPC: capa.VPCSpec{
 					CidrBlock:                  mainCIDR.String(),
 					AvailabilityZoneUsageLimit: ptr.To(len(zones)),
 					AvailabilityZoneSelection:  &capa.AZSelectionSchemeOrdered,
 				},
-
 				CNI: &capa.CNISpec{
 					CNIIngressRules: capa.CNIIngressRules{
 						{
@@ -234,7 +233,11 @@ func GenerateClusterAssets(installConfig *installconfig.InstallConfig, clusterID
 		// 		PublicIpv4Pool: platformSpec.Ec2.ElasticIp.PublicIpv4Pool,
 		// 	}
 		// }
-		awsCluster.Spec.ControlPlaneLoadBalancer.ElasticIp = &capa.Ec2ElasticIp{
+		// awsCluster.Spec.ControlPlaneLoadBalancer.ElasticIp = &capa.Ec2ElasticIp{
+		// 	AllocatedIps:   platformSpec.Ec2.ElasticIp.AllocatedIps,
+		// 	PublicIpv4Pool: platformSpec.Ec2.ElasticIp.PublicIpv4Pool,
+		// }
+		awsCluster.Spec.NetworkSpec.ElasticIp = &capa.Ec2ElasticIp{
 			AllocatedIps:   platformSpec.Ec2.ElasticIp.AllocatedIps,
 			PublicIpv4Pool: platformSpec.Ec2.ElasticIp.PublicIpv4Pool,
 		}

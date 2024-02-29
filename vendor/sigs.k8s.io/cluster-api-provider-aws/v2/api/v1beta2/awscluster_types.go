@@ -107,22 +107,22 @@ type AWSClusterSpec struct {
 	// +optional
 	S3Bucket *S3Bucket `json:"s3Bucket,omitempty"`
 
-	// Ec2 is an optional field that can be used to tell the installation process to use
-	// Elastic IP address that had been previously created to assign to the resources with Public IPv4
-	// address created by installer.
-	// +optional
-	Ec2 *Ec2 `json:"ec2,omitempty"`
+	// // Ec2 is an optional field that can be used to tell the installation process to use
+	// // Elastic IP address that had been previously created to assign to the resources with Public IPv4
+	// // address created by installer.
+	// // +optional
+	// Ec2 *Ec2 `json:"ec2,omitempty"`
 }
 
-// ServiceEndpoint store the configuration for services to
-// override existing defaults of AWS Services.
-type Ec2 struct {
-	// ElasticIp is an optional field that can be used to tell the installation process to use
-	// Elastic IP address that had been previously created to assign to the resources with Public IPv4
-	// address created by installer.
-	// +optional
-	ElasticIp *Ec2ElasticIp `json:"elasticIp,omitempty"`
-}
+// // ServiceEndpoint store the configuration for services to
+// // override existing defaults of AWS Services.
+// type Ec2 struct {
+// 	// ElasticIp is an optional field that can be used to tell the installation process to use
+// 	// Elastic IP address that had been previously created to assign to the resources with Public IPv4
+// 	// address created by installer.
+// 	// +optional
+// 	ElasticIp *Ec2ElasticIp `json:"elasticIp,omitempty"`
+// }
 
 // Ec2ElasticIp store the configuration for services to
 // override existing defaults of AWS Services.

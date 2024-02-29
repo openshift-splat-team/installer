@@ -244,6 +244,12 @@ type NetworkSpec struct {
 	// AdditionalControlPlaneIngressRules is an optional set of ingress rules to add to the control plane
 	// +optional
 	AdditionalControlPlaneIngressRules []IngressRule `json:"additionalControlPlaneIngressRules,omitempty"`
+
+	// ElasticIp is an optional field that can be used to tell the installation process to use
+	// Elastic IP address that had been previously created to assign to the resources with Public IPv4
+	// address created by installer.
+	// +optional
+	ElasticIp *Ec2ElasticIp `json:"elasticIp,omitempty"`
 }
 
 // IPv6 contains ipv6 specific settings for the network.

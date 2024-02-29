@@ -54,12 +54,7 @@ platform:
       elasticIp:
         publicIpv4Pool: ${PUBLIC_IPV4_POOL_ID}
         allocatedIps:
-        - eipalloc-0058818ab62e494fe
-        - eipalloc-0a043af2ea479afc6
-        - eipalloc-0e24d49b570b18334
-        - eipalloc-088d2f4e6c94f681c
-        - eipalloc-0151e3eeef7b3e7f0
-        - eipalloc-0cc6fbacf986c8945
+$(while read -r line; do echo "        - $line"; done </tmp/eip-allocations)
 publish: External
 pullSecret: '$(cat ${PULL_SECRET_FILE} |awk -v ORS= -v OFS= '{$1=$1}1')'
 sshKey: |
@@ -68,7 +63,6 @@ EOF
 
   #OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE="quay.io/openshift-release-dev/ocp-release:4.16.0-ec.2-x86_64" \
   #openshift-install-capa create manifests --dir ${INSTALL_DIR} --log-level=debug
-
   OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE="quay.io/openshift-release-dev/ocp-release:4.16.0-ec.2-x86_64" \
   openshift-install-capa create cluster --dir ${INSTALL_DIR} --log-level=debug | tee -a ${INSTALL_DIR}/install.log
 

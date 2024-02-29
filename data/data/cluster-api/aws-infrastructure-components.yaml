@@ -838,6 +838,20 @@ spec:
               network:
                 description: NetworkSpec encapsulates all things related to AWS network.
                 properties:
+                  elasticIp:
+                    description: ec2 elastic ip resources.
+                    properties:
+                      publicIpv4Pool:
+                        default: ""
+                        description: Custom Public Public Ipv4 Pool
+                        type: string
+                      allocatedIps:
+                        description: provisioned elastic Ips to be consumed for the cluster
+                          creation.
+                        items:
+                          type: string
+                        type: array
+                    type: object
                   cni:
                     description: CNI configuration
                     properties:
@@ -1851,6 +1865,20 @@ spec:
               network:
                 description: NetworkSpec encapsulates all things related to AWS network.
                 properties:
+                  elasticIp:
+                    description: ec2 elastic ip resources.
+                    properties:
+                      publicIpv4Pool:
+                        default: ""
+                        description: Custom Public Public Ipv4 Pool
+                        type: string
+                      allocatedIps:
+                        description: provisioned elastic Ips to be consumed for the cluster
+                          creation.
+                        items:
+                          type: string
+                        type: array
+                    type: object
                   additionalControlPlaneIngressRules:
                     description: AdditionalControlPlaneIngressRules is an optional
                       set of ingress rules to add to the control plane
@@ -3338,6 +3366,20 @@ spec:
                         description: NetworkSpec encapsulates all things related to
                           AWS network.
                         properties:
+                          elasticIp:
+                            description: ec2 elastic ip resources.
+                            properties:
+                              publicIpv4Pool:
+                                default: ""
+                                description: Custom Public Public Ipv4 Pool
+                                type: string
+                              allocatedIps:
+                                description: provisioned elastic Ips to be consumed for the cluster
+                                  creation.
+                                items:
+                                  type: string
+                                type: array
+                            type: object
                           cni:
                             description: CNI configuration
                             properties:
@@ -3927,6 +3969,20 @@ spec:
                         description: NetworkSpec encapsulates all things related to
                           AWS network.
                         properties:
+                          elasticIp:
+                            description: ec2 elastic ip resources.
+                            properties:
+                              publicIpv4Pool:
+                                default: ""
+                                description: Custom Public Public Ipv4 Pool
+                                type: string
+                              allocatedIps:
+                                description: provisioned elastic Ips to be consumed for the cluster
+                                  creation.
+                                items:
+                                  type: string
+                                type: array
+                            type: object
                           additionalControlPlaneIngressRules:
                             description: AdditionalControlPlaneIngressRules is an
                               optional set of ingress rules to add to the control
@@ -8123,6 +8179,20 @@ spec:
               network:
                 description: NetworkSpec encapsulates all things related to AWS network.
                 properties:
+                  elasticIp:
+                    description: ec2 elastic ip resources.
+                    properties:
+                      publicIpv4Pool:
+                        default: ""
+                        description: Custom Public Public Ipv4 Pool
+                        type: string
+                      allocatedIps:
+                        description: provisioned elastic Ips to be consumed for the cluster
+                          creation.
+                        items:
+                          type: string
+                        type: array
+                    type: object
                   additionalControlPlaneIngressRules:
                     description: AdditionalControlPlaneIngressRules is an optional
                       set of ingress rules to add to the control plane
@@ -9709,6 +9779,20 @@ spec:
               network:
                 description: NetworkSpec encapsulates all things related to AWS network.
                 properties:
+                  elasticIp:
+                    description: ec2 elastic ip resources.
+                    properties:
+                      publicIpv4Pool:
+                        default: ""
+                        description: Custom Public Public Ipv4 Pool
+                        type: string
+                      allocatedIps:
+                        description: provisioned elastic Ips to be consumed for the cluster
+                          creation.
+                        items:
+                          type: string
+                        type: array
+                    type: object
                   additionalControlPlaneIngressRules:
                     description: AdditionalControlPlaneIngressRules is an optional
                       set of ingress rules to add to the control plane

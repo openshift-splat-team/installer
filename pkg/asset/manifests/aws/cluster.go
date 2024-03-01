@@ -165,13 +165,44 @@ func GenerateClusterAssets(installConfig *installconfig.InstallConfig, clusterID
 				PresignedURLDuration: &metav1.Duration{Duration: 1 * time.Hour},
 			},
 			ControlPlaneLoadBalancer: &capa.AWSLoadBalancerSpec{
-				Name:             ptr.To(clusterID.InfraID + "-int"),
-				LoadBalancerType: capa.LoadBalancerTypeNLB,
-				Scheme:           &capa.ELBSchemeInternal,
-				AdditionalListeners: []capa.AdditionalListenerSpec{
-					{
-						Port:     22623,
+				Name:                   ptr.To(clusterID.InfraID + "-int"),
+				LoadBalancerType:       capa.LoadBalancerTypeNLB,
+				Scheme:                 &capa.ELBSchemeInternal,
+				CrossZoneLoadBalancing: true,
+				Listeners: []*capa.Listener{
+					&capa.Listener{
 						Protocol: capa.ELBProtocolTCP,
+						Port:     capa.DefaultAPIServerPort,
+						TargetGroup: capa.TargetGroupSpec{
+							Name:     fmt.Sprintf("%s-int-api", clusterID.InfraID),
+							Port:     capa.DefaultAPIServerPort,
+							Protocol: capa.ELBProtocolTCP,
+							HealthCheck: &capa.TargetGroupHealthCheck{
+								Protocol:        ptr.To("HTTPS"),
+								Port:            ptr.To(capa.DefaultAPIServerPortString),
+								Path:            ptr.To("/readyz"),
+								IntervalSeconds: ptr.To(int64(10)),
+								TimeoutSeconds:  ptr.To(int64(10)),
+								ThresholdCount:  ptr.To(int64(2)),
+							},
+						},
+					},
+					&capa.Listener{
+						Protocol: capa.ELBProtocolTCP,
+						Port:     22623,
+						TargetGroup: capa.TargetGroupSpec{
+							Name:     fmt.Sprintf("%s-int-mcs", clusterID.InfraID),
+							Port:     int64(22623),
+							Protocol: capa.ELBProtocolTCP,
+							HealthCheck: &capa.TargetGroupHealthCheck{
+								Protocol:        ptr.To("HTTPS"),
+								Port:            ptr.To("22623"),
+								Path:            ptr.To("/healthz"),
+								IntervalSeconds: ptr.To(int64(10)),
+								TimeoutSeconds:  ptr.To(int64(10)),
+								ThresholdCount:  ptr.To(int64(2)),
+							},
+						},
 					},
 				},
 				IngressRules: []capa.IngressRule{
@@ -205,6 +236,26 @@ func GenerateClusterAssets(installConfig *installconfig.InstallConfig, clusterID
 				// 		CidrBlocks:  []string{"0.0.0.0/0"},
 				// 	},
 				// },
+				CrossZoneLoadBalancing: true,
+				Listeners: []*capa.Listener{
+					&capa.Listener{
+						Protocol: capa.ELBProtocolTCP,
+						Port:     capa.DefaultAPIServerPort,
+						TargetGroup: capa.TargetGroupSpec{
+							Name:     fmt.Sprintf("%s-ext-api", clusterID.InfraID),
+							Port:     int64(6443),
+							Protocol: capa.ELBProtocolTCP,
+							HealthCheck: &capa.TargetGroupHealthCheck{
+								Protocol:        ptr.To("HTTPS"),
+								Port:            ptr.To(capa.DefaultAPIServerPortString),
+								Path:            ptr.To("/readyz"),
+								IntervalSeconds: ptr.To(int64(10)),
+								TimeoutSeconds:  ptr.To(int64(10)),
+								ThresholdCount:  ptr.To(int64(2)),
+							},
+						},
+					},
+				},
 			},
 			AdditionalTags: capa.Tags{fmt.Sprintf("kubernetes.io/cluster/%s", clusterID.InfraID): "owned"},
 		},

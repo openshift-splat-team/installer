@@ -173,45 +173,41 @@ func (s *Service) getAPIServerLBSpec(elbName string, lbSpec *infrav1.AWSLoadBala
 	}
 
 	res := &infrav1.LoadBalancer{
-		Name:          elbName,
-		Scheme:        scheme,
-		ELBAttributes: make(map[string]*string),
-		ELBListeners: []infrav1.Listener{
-			{
-				Protocol: infrav1.ELBProtocolTCP,
-				Port:     infrav1.DefaultAPIServerPort,
-				TargetGroup: infrav1.TargetGroupSpec{
-					Name:     fmt.Sprintf("apiserver-target-%d", time.Now().Unix()),
-					Port:     infrav1.DefaultAPIServerPort,
-					Protocol: infrav1.ELBProtocolTCP,
-					VpcID:    s.scope.VPC().ID,
-					HealthCheck: &infrav1.TargetGroupHealthCheck{
-						Protocol: aws.String(string(infrav1.ELBProtocolTCP)),
-						Port:     aws.String(infrav1.DefaultAPIServerPortString),
-					},
-				},
-			},
-		},
+		Name:             elbName,
+		Scheme:           scheme,
+		ELBAttributes:    make(map[string]*string),
 		SecurityGroupIDs: securityGroupIDs,
 	}
 
+	// Build listeners
+	useDefaultAPIListener := true
+	defaultListenerAPI := infrav1.Listener{
+		Protocol: infrav1.ELBProtocolTCP,
+		Port:     infrav1.DefaultAPIServerPort,
+		TargetGroup: infrav1.TargetGroupSpec{
+			Name:     fmt.Sprintf("apiserver-target-%d", time.Now().Unix()),
+			Port:     infrav1.DefaultAPIServerPort,
+			Protocol: infrav1.ELBProtocolTCP,
+			VpcID:    s.scope.VPC().ID,
+			HealthCheck: &infrav1.TargetGroupHealthCheck{
+				Protocol: aws.String(string(infrav1.ELBProtocolTCP)),
+				Port:     aws.String(infrav1.DefaultAPIServerPortString),
+			},
+		},
+	}
+
 	if lbSpec != nil {
-		for _, additionalListeners := range lbSpec.AdditionalListeners {
-			res.ELBListeners = append(res.ELBListeners, infrav1.Listener{
-				Protocol: additionalListeners.Protocol,
-				Port:     additionalListeners.Port,
-				TargetGroup: infrav1.TargetGroupSpec{
-					Name:     fmt.Sprintf("additional-listener-%d", time.Now().Unix()),
-					Port:     additionalListeners.Port,
-					Protocol: additionalListeners.Protocol,
-					VpcID:    s.scope.VPC().ID,
-					HealthCheck: &infrav1.TargetGroupHealthCheck{
-						Protocol: aws.String(string(additionalListeners.Protocol)),
-						Port:     aws.String(strconv.FormatInt(additionalListeners.Port, 10)),
-					},
-				},
-			})
+		for _, ln := range lbSpec.Listeners {
+			if ln.Port == infrav1.DefaultAPIServerPort {
+				useDefaultAPIListener = false
+			}
+			ln.TargetGroup.VpcID = s.scope.VPC().ID
+			res.ELBListeners = append(res.ELBListeners, *ln)
 		}
+	}
+
+	if useDefaultAPIListener {
+		res.ELBListeners = append(res.ELBListeners, defaultListenerAPI)
 	}
 
 	if lbSpec != nil && lbSpec.LoadBalancerType != infrav1.LoadBalancerTypeNLB {
@@ -321,6 +317,20 @@ func (s *Service) createLB(spec *infrav1.LoadBalancer, lbSpec *infrav1.AWSLoadBa
 			targetGroupInput.HealthCheckEnabled = aws.Bool(true)
 			targetGroupInput.HealthCheckProtocol = ln.TargetGroup.HealthCheck.Protocol
 			targetGroupInput.HealthCheckPort = ln.TargetGroup.HealthCheck.Port
+			if targetGroupInput.HealthCheckProtocol == aws.String("HTTP") || targetGroupInput.HealthCheckProtocol == aws.String("HTTPS") {
+				if ln.TargetGroup.HealthCheck.Path != nil {
+					targetGroupInput.HealthCheckPath = ln.TargetGroup.HealthCheck.Path
+				}
+			}
+			if ln.TargetGroup.HealthCheck.IntervalSeconds != nil {
+				targetGroupInput.HealthCheckIntervalSeconds = ln.TargetGroup.HealthCheck.IntervalSeconds
+			}
+			if ln.TargetGroup.HealthCheck.ThresholdCount != nil {
+				targetGroupInput.HealthyThresholdCount = ln.TargetGroup.HealthCheck.ThresholdCount
+			}
+			if ln.TargetGroup.HealthCheck.TimeoutSeconds != nil {
+				targetGroupInput.HealthCheckTimeoutSeconds = ln.TargetGroup.HealthCheck.TimeoutSeconds
+			}
 		}
 		s.scope.Debug("creating target group", "group", targetGroupInput, "listener", ln)
 		group, err := s.ELBV2Client.CreateTargetGroup(targetGroupInput)

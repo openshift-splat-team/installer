@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/openshift/installer/pkg/asset/cluster/proxmox"
 
 	"github.com/pkg/errors"
 
@@ -35,6 +36,7 @@ import (
 	openstacktypes "github.com/openshift/installer/pkg/types/openstack"
 	ovirttypes "github.com/openshift/installer/pkg/types/ovirt"
 	powervstypes "github.com/openshift/installer/pkg/types/powervs"
+	proxmoxtypes "github.com/openshift/installer/pkg/types/proxmox"
 	vspheretypes "github.com/openshift/installer/pkg/types/vsphere"
 )
 
@@ -105,6 +107,8 @@ func (m *Metadata) Generate(_ context.Context, parents asset.Parents) (err error
 	case externaltypes.Name, nonetypes.Name:
 	case nutanixtypes.Name:
 		metadata.ClusterPlatformMetadata.Nutanix = nutanix.Metadata(installConfig.Config)
+	case proxmoxtypes.Name:
+		metadata.ClusterPlatformMetadata.Proxmox = proxmox.Metadata(installConfig.Config)
 	default:
 		return errors.Errorf("no known platform")
 	}

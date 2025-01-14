@@ -11,6 +11,7 @@ import (
 	"github.com/openshift/installer/pkg/types/openstack"
 	"github.com/openshift/installer/pkg/types/ovirt"
 	"github.com/openshift/installer/pkg/types/powervs"
+	"github.com/openshift/installer/pkg/types/proxmox"
 	"github.com/openshift/installer/pkg/types/vsphere"
 )
 
@@ -40,6 +41,7 @@ type ClusterPlatformMetadata struct {
 	PowerVS   *powervs.Metadata   `json:"powervs,omitempty"`
 	VSphere   *vsphere.Metadata   `json:"vsphere,omitempty"`
 	Nutanix   *nutanix.Metadata   `json:"nutanix,omitempty"`
+	Proxmox   *proxmox.Metadata   `json:"proxmox,omitempty"`
 }
 
 // Platform returns a string representation of the platform
@@ -78,6 +80,9 @@ func (cpm *ClusterPlatformMetadata) Platform() string {
 	}
 	if cpm.Nutanix != nil {
 		return nutanix.Name
+	}
+	if cpm.Proxmox != nil {
+		return proxmox.Name
 	}
 	return ""
 }

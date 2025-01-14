@@ -3,6 +3,7 @@ package machines
 import (
 	"context"
 	"fmt"
+	proxmoxtypes "github.com/openshift/installer/pkg/types/proxmox"
 	"os"
 	"path/filepath"
 	"strings"
@@ -204,6 +205,17 @@ func defaultNutanixMachinePoolPlatform() nutanixtypes.MachinePool {
 		MemoryMiB:         16384,
 		OSDisk: nutanixtypes.OSDisk{
 			DiskSizeGiB: decimalRootVolumeSize,
+		},
+	}
+}
+
+func defaultProxmoxMachinePoolPlatform() proxmoxtypes.MachinePool {
+	return proxmoxtypes.MachinePool{
+		NumSockets: 1,
+		NumCores:   4,
+		MemoryMiB:  16384,
+		OSDisk: proxmoxtypes.OSDisk{
+			DiskSizeGB: decimalRootVolumeSize,
 		},
 	}
 }

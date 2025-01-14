@@ -3,6 +3,7 @@ package machines
 import (
 	"context"
 	"fmt"
+	proxmoxtypes "github.com/openshift/installer/pkg/types/proxmox"
 	"os"
 	"path/filepath"
 	"strings"
@@ -507,6 +508,15 @@ func (m *Master) Generate(ctx context.Context, dependencies asset.Parents) error
 			return errors.Wrap(err, "failed to create master machine objects")
 		}
 		nutanix.ConfigMasters(machines, clusterID.InfraID)
+	case proxmoxtypes.Name:
+		// do something here
+		mpool := defaultProxmoxMachinePoolPlatform()
+		mpool.Set(ic.Platform.Proxmox.DefaultMachinePlatform)
+		mpool.Set(pool.Platform.Proxmox)
+
+		// todo validation
+		pool.Platform.Proxmox = &mpool
+
 	default:
 		return fmt.Errorf("invalid Platform")
 	}

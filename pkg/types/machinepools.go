@@ -10,6 +10,7 @@ import (
 	"github.com/openshift/installer/pkg/types/openstack"
 	"github.com/openshift/installer/pkg/types/ovirt"
 	"github.com/openshift/installer/pkg/types/powervs"
+	"github.com/openshift/installer/pkg/types/proxmox"
 	"github.com/openshift/installer/pkg/types/vsphere"
 )
 
@@ -109,6 +110,9 @@ type MachinePoolPlatform struct {
 
 	// Nutanix is the configuration used when installing on Nutanix.
 	Nutanix *nutanix.MachinePool `json:"nutanix,omitempty"`
+
+	// Proxmox is the configuration used when installing on Proxmox
+	Proxmox *proxmox.MachinePool `json:"proxmox,omitempty"`
 }
 
 // Name returns a string representation of the platform (e.g. "aws" if
@@ -138,6 +142,8 @@ func (p *MachinePoolPlatform) Name() string {
 		return powervs.Name
 	case p.Nutanix != nil:
 		return nutanix.Name
+	case p.Proxmox != nil:
+		return proxmox.Name
 	default:
 		return ""
 	}

@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"github.com/openshift/installer/pkg/types/proxmox"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -47,6 +48,7 @@ var (
 		openstack.Name,
 		powervs.Name,
 		vsphere.Name,
+		proxmox.Name,
 	}
 	// HiddenPlatformNames is a slice with all the
 	// hidden-but-supported platform names. This list isn't presented
@@ -308,6 +310,10 @@ type Platform struct {
 	// Nutanix is the configuration used when installing on Nutanix.
 	// +optional
 	Nutanix *nutanix.Platform `json:"nutanix,omitempty"`
+
+	// Proxmox is the configuration used when installing Proxmox
+	// +optional
+	Proxmox *proxmox.Platform `json:"proxmox,omitempty"`
 }
 
 // OperatorPublishingStrategy is used to control the visibility of the components which can be used to have a mix of public
@@ -357,6 +363,8 @@ func (p *Platform) Name() string {
 		return powervs.Name
 	case p.Nutanix != nil:
 		return nutanix.Name
+	case p.Proxmox != nil:
+		return proxmox.Name
 	default:
 		return ""
 	}

@@ -1,8 +1,10 @@
 package proxmox
 
 type Platform struct {
-	Proxmoxs []string `json:"proxmoxs"`
+	Proxmoxs []Proxmox `json:"proxmoxs"`
 }
+
+// todo: do we use baremetal networking (static pods)???
 
 type Proxmox struct {
 	Url string `json:"url"`

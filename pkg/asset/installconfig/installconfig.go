@@ -17,6 +17,7 @@ import (
 	icopenstack "github.com/openshift/installer/pkg/asset/installconfig/openstack"
 	icovirt "github.com/openshift/installer/pkg/asset/installconfig/ovirt"
 	icpowervs "github.com/openshift/installer/pkg/asset/installconfig/powervs"
+	icproxmox "github.com/openshift/installer/pkg/asset/installconfig/proxmox"
 	icvsphere "github.com/openshift/installer/pkg/asset/installconfig/vsphere"
 	"github.com/openshift/installer/pkg/types"
 	"github.com/openshift/installer/pkg/types/defaults"
@@ -35,6 +36,7 @@ type InstallConfig struct {
 	IBMCloud *icibmcloud.Metadata `json:"ibmcloud,omitempty"`
 	PowerVS  *icpowervs.Metadata  `json:"powervs,omitempty"`
 	VSphere  *icvsphere.Metadata  `json:"vsphere,omitempty"`
+	Proxmox  *icproxmox.Metadata  `json:"proxmox,omitempty"`
 }
 
 var _ asset.WritableAsset = (*InstallConfig)(nil)
@@ -99,6 +101,7 @@ func (a *InstallConfig) Generate(ctx context.Context, parents asset.Parents) err
 	a.Config.Ovirt = platform.Ovirt
 	a.Config.PowerVS = platform.PowerVS
 	a.Config.Nutanix = platform.Nutanix
+	a.Config.Proxmox = platform.Proxmox
 
 	defaults.SetInstallConfigDefaults(a.Config)
 
@@ -160,6 +163,9 @@ func (a *InstallConfig) finish(ctx context.Context, filename string) error {
 		for _, v := range a.Config.VSphere.VCenters {
 			_ = a.VSphere.AddCredentials(v.Server, v.Username, v.Password)
 		}
+	}
+	if a.Config.Proxmox != nil {
+		a.Proxmox = icproxmox.NewMetadata()
 	}
 
 	if err := validation.ValidateInstallConfig(a.Config, false).ToAggregate(); err != nil {

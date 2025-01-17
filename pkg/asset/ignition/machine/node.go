@@ -2,6 +2,7 @@ package machine
 
 import (
 	"fmt"
+	proxmoxtypes "github.com/openshift/installer/pkg/types/proxmox"
 	"net"
 	"net/url"
 
@@ -45,6 +46,10 @@ func pointerIgnitionConfig(installConfig *types.InstallConfig, rootCA []byte, ro
 	case vspheretypes.Name:
 		if len(installConfig.VSphere.APIVIPs) > 0 {
 			ignitionHost = net.JoinHostPort(installConfig.VSphere.APIVIPs[0], "22623")
+		}
+	case proxmoxtypes.Name:
+		if len(installConfig.Proxmox.APIVIPs) > 0 {
+			ignitionHost = net.JoinHostPort(installConfig.Proxmox.APIVIPs[0], "22623")
 		}
 	}
 	return &igntypes.Config{

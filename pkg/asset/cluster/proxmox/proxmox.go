@@ -5,7 +5,7 @@ import (
 	typesproxmox "github.com/openshift/installer/pkg/types/proxmox"
 )
 
-// Metadata converts an install configuration to vSphere metadata.
+// Metadata converts an install configuration to Proxmox metadata.
 func Metadata(config *types.InstallConfig) *typesproxmox.Metadata {
 	terraformPlatform := "proxmox"
 

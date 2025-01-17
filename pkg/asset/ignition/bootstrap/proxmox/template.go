@@ -1,4 +1,4 @@
-package vsphere
+package proxmox
 
 import (
 	"github.com/openshift/installer/pkg/types/proxmox"
@@ -13,8 +13,6 @@ type TemplateData struct {
 // GetTemplateData returns platform-specific data for bootstrap templates.
 func GetTemplateData(config *proxmox.Platform) *TemplateData {
 	var templateData TemplateData
-
-	// TODO: do we use baremetal networking???
 
 	templateData.UserProvidedVIPs = len(config.APIVIPs) > 0
 

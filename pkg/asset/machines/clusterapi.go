@@ -3,6 +3,7 @@ package machines
 import (
 	"context"
 	"fmt"
+	proxmoxtypes "github.com/openshift/installer/pkg/types/proxmox"
 	"net"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	nutanixcapi "github.com/openshift/installer/pkg/asset/machines/nutanix"
 	"github.com/openshift/installer/pkg/asset/machines/openstack"
 	"github.com/openshift/installer/pkg/asset/machines/powervs"
+	proxmoxcapi "github.com/openshift/installer/pkg/asset/machines/proxmox"
 	vspherecapi "github.com/openshift/installer/pkg/asset/machines/vsphere"
 	"github.com/openshift/installer/pkg/asset/manifests/capiutils"
 	"github.com/openshift/installer/pkg/asset/rhcos"
@@ -338,6 +340,13 @@ func (c *ClusterAPI) Generate(ctx context.Context, dependencies asset.Parents) e
 			return fmt.Errorf("failed to create bootstrap machine objects %w", err)
 		}
 		c.FileList = append(c.FileList, bootstrapMachines...)
+	case proxmoxtypes.Name:
+		mpool := defaultProxmoxMachinePoolPlatform()
+		mpool.Set(ic.Platform.Proxmox.DefaultMachinePlatform)
+		mpool.Set(pool.Platform.Proxmox)
+
+		c.FileList, err = proxmoxcapi.GenerateMachines(ctx, clusterID.InfraID, ic, &pool, templateName, "master", installConfig.)
+
 	case vspheretypes.Name:
 		mpool := defaultVSphereMachinePoolPlatform()
 		mpool.NumCPUs = 4

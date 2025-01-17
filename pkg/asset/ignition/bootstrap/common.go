@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"github.com/openshift/installer/pkg/asset/ignition/bootstrap/proxmox"
+	proxmoxtypes "github.com/openshift/installer/pkg/types/proxmox"
 	"io"
 	"net"
 	"os"
@@ -106,6 +108,7 @@ type platformTemplateData struct {
 	BareMetal *baremetal.TemplateData
 	VSphere   *vsphere.TemplateData
 	GCP       *gcp.TemplateData
+	Proxmox   *proxmox.TemplateData
 }
 
 // Common is an asset that generates the ignition config for bootstrap nodes.
@@ -331,6 +334,8 @@ func (a *Common) getTemplateData(dependencies asset.Parents, bootstrapInPlace bo
 		platformData.GCP = gcp.GetTemplateData(installConfig.Config.Platform.GCP)
 	case vspheretypes.Name:
 		platformData.VSphere = vsphere.GetTemplateData(installConfig.Config.Platform.VSphere)
+	case proxmoxtypes.Name:
+		platformData.Proxmox = proxmox.GetTemplateData(installConfig.Config.Platform.Proxmox)
 	}
 
 	bootstrapNodeIP := os.Getenv("OPENSHIFT_INSTALL_BOOTSTRAP_NODE_IP")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/openshift/installer/pkg/types/proxmox"
 
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
@@ -18,6 +19,7 @@ import (
 	osconfig "github.com/openshift/installer/pkg/asset/installconfig/openstack"
 	ovirtconfig "github.com/openshift/installer/pkg/asset/installconfig/ovirt"
 	powervsconfig "github.com/openshift/installer/pkg/asset/installconfig/powervs"
+	proxmoxconfig "github.com/openshift/installer/pkg/asset/installconfig/proxmox"
 	vsconfig "github.com/openshift/installer/pkg/asset/installconfig/vsphere"
 	"github.com/openshift/installer/pkg/types/aws"
 	"github.com/openshift/installer/pkg/types/azure"
@@ -124,6 +126,10 @@ func (a *PlatformProvisionCheck) Generate(ctx context.Context, dependencies asse
 		}
 	case vsphere.Name:
 		if err := vsconfig.ValidateForProvisioning(ic.Config); err != nil {
+			return err
+		}
+	case proxmox.Name:
+		if err := proxmoxconfig.ValidateForProvisioning(ic.Config); err != nil {
 			return err
 		}
 	case ovirt.Name:

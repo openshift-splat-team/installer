@@ -3,6 +3,7 @@ package installconfig
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/installer/pkg/types/proxmox"
 	"sort"
 
 	survey "github.com/AlecAivazis/survey/v2"
@@ -18,6 +19,7 @@ import (
 	nutanixconfig "github.com/openshift/installer/pkg/asset/installconfig/nutanix"
 	openstackconfig "github.com/openshift/installer/pkg/asset/installconfig/openstack"
 	powervsconfig "github.com/openshift/installer/pkg/asset/installconfig/powervs"
+	proxmoxconfig "github.com/openshift/installer/pkg/asset/installconfig/proxmox"
 	vsphereconfig "github.com/openshift/installer/pkg/asset/installconfig/vsphere"
 	"github.com/openshift/installer/pkg/types"
 	"github.com/openshift/installer/pkg/types/aws"
@@ -106,6 +108,8 @@ func (a *platform) Generate(ctx context.Context, _ asset.Parents) error {
 		if err != nil {
 			return err
 		}
+	case proxmox.Name:
+		a.Proxmox, err = proxmoxconfig.Platform()
 	default:
 		return fmt.Errorf("unknown platform type %q", platform)
 	}

@@ -64,6 +64,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-version v1.7.0
 	github.com/hashicorp/terraform-exec v0.17.3
+	github.com/ionos-cloud/cluster-api-provider-proxmox v0.6.2
 	github.com/jongio/azidext/go/azidext v0.5.0
 	github.com/kdomanski/iso9660 v0.2.1
 	github.com/luthermonson/go-proxmox v0.2.2-0.20241024162837-5617b3053067

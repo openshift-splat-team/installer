@@ -588,6 +588,8 @@ github.com/imdario/mergo v0.3.16/go.mod h1:WBLT9ZmE3lPoWsEzCh9LPo3TiwVN+ZKEjmz+h
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
+github.com/ionos-cloud/cluster-api-provider-proxmox v0.6.2 h1:2XZZyvdJ8obpbJ1ckN5/ylHhcKBvMUUay7dPzKr40Kk=
+github.com/ionos-cloud/cluster-api-provider-proxmox v0.6.2/go.mod h1:m/z+oJ9k6J2SiRcnVWOIz7BJ6XdXbatmTzYW/QSF+ls=
 github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 h1:BQSFePA1RWJOlocH6Fxy8MmwDt+yVQYULKfN0RoTN8A=
 github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99/go.mod h1:1lJo3i6rXxKeerYnT8Nvf0QmHCRC1n8sfWVwXF2Frvo=
 github.com/jinzhu/copier v0.3.5 h1:GlvfUwHk62RokgqVNvYsku0TATCF7bAHVwEXoBh3iJg=
@@ -1564,6 +1566,8 @@ rsc.io/quote/v3 v3.1.0/go.mod h1:yEA65RcK8LyAZtP9Kv3t0HmxON59tX3rD+tICJqUlj0=
 rsc.io/sampler v1.3.0/go.mod h1:T1hPZKmBbMNahiBKFy5HrXp6adAjACjK9JXDnKaTXpA=
 sigs.k8s.io/cluster-api v1.8.5 h1:lNA2fPN4fkXEs+oOQlnwxT/4VwRFBpv5kkSoJG8nqBA=
 sigs.k8s.io/cluster-api v1.8.5/go.mod h1:pXv5LqLxuIbhGIXykyNKiJh+KrLweSBajVHHitPLyoY=
+sigs.k8s.io/cluster-api-ipam-provider-in-cluster v0.1.0 h1:k93V8X7ihC9CJff4AP7csyRIMO28cqp0pRMkvcChpis=
+sigs.k8s.io/cluster-api-ipam-provider-in-cluster v0.1.0/go.mod h1:C+C1Xos6z9H9ymJSJsjI2qfqo/EnsugS7WHCYh3O+Nc=
 sigs.k8s.io/cluster-api-provider-aws/v2 v2.6.1-0.20241026111253-5b4f7c1acb52 h1:HoQrHMmOCFdY4QwnxYU8LkaQSKPelekGh8S1V52rXL4=
 sigs.k8s.io/cluster-api-provider-aws/v2 v2.6.1-0.20241026111253-5b4f7c1acb52/go.mod h1:fQ/aPIQs1YKb1hDJtibBY7kspUqvXb9JSWIYkzWlX34=
 sigs.k8s.io/cluster-api-provider-azure v1.15.1-0.20240617212811-a52056dfb88c h1:ujrGTddl9yRXaqVPJ81+aBCGUAQtrlmGg+uCRJHE7vU=

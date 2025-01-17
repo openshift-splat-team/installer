@@ -345,7 +345,9 @@ func (c *ClusterAPI) Generate(ctx context.Context, dependencies asset.Parents) e
 		mpool.Set(ic.Platform.Proxmox.DefaultMachinePlatform)
 		mpool.Set(pool.Platform.Proxmox)
 
-		c.FileList, err = proxmoxcapi.GenerateMachines(ctx, clusterID.InfraID, ic, &pool, templateName, "master", installConfig.)
+		pool.Platform.Proxmox = &mpool
+		templateName := clusterID.InfraID + "-rhcos"
+		c.FileList, err = proxmoxcapi.GenerateMachines(ctx, clusterID.InfraID, ic, &pool, templateName, "master", installConfig.Proxmox)
 
 	case vspheretypes.Name:
 		mpool := defaultVSphereMachinePoolPlatform()

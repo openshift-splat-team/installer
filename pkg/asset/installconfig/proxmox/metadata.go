@@ -5,6 +5,7 @@ import (
 	"sync"
 )
 
+// todo: proxmox auth stuff here
 type Metadata struct {
 	ProxmoxCredentials *proxmox.Credentials
 

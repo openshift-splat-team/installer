@@ -2,7 +2,7 @@ module openshift/installer/cluster-api/providers/proxmox
 
 go 1.23.4
 
-require github.com/ionos-cloud/cluster-api-provider-proxmox v0.6.2-0.20250113102253-5d702dcf0515
+require github.com/ionos-cloud/cluster-api-provider-proxmox v0.7.5
 
 replace sigs.k8s.io/cluster-api => sigs.k8s.io/cluster-api v1.8.5
 

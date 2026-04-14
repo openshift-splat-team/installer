@@ -152,6 +152,62 @@ type Platform struct {
 	LoadBalancer *configv1.VSpherePlatformLoadBalancer `json:"loadBalancer,omitempty"`
 	// Hosts defines network configurations to be applied by the installer. Hosts is available in TechPreview.
 	Hosts []*Host `json:"hosts,omitempty"`
+
+	// ComponentCredentials defines per-component vSphere credentials for improved security posture
+	// through principle of least privilege. When specified, each OpenShift component receives distinct
+	// vCenter credentials matched to its operational needs.
+	// +optional
+	ComponentCredentials *ComponentCredentials `json:"componentCredentials,omitempty"`
+}
+
+// ComponentCredentials holds per-component credential accounts for vSphere operations.
+// Each component receives only the vCenter permissions it needs, reducing security blast radius.
+// If a component credential is not specified, the component falls back to the deprecated
+// legacy credentials (DeprecatedUsername/DeprecatedPassword) from the Platform struct.
+type ComponentCredentials struct {
+	// Installer credentials used for cluster infrastructure deployment.
+	// Requires full deployment operations privileges (~45 permissions).
+	// +optional
+	Installer *AccountCredentials `json:"installer,omitempty"`
+
+	// MachineAPI credentials used for VM lifecycle operations.
+	// Requires VM provisioning and configuration privileges (~35 permissions).
+	// +optional
+	MachineAPI *AccountCredentials `json:"machineAPI,omitempty"`
+
+	// CSIDriver credentials used for storage provisioning.
+	// Requires datastore and disk management privileges (~10-15 permissions).
+	// +optional
+	CSIDriver *AccountCredentials `json:"csiDriver,omitempty"`
+
+	// CloudController credentials used for node discovery.
+	// Requires read-only privileges (~10 permissions).
+	// +optional
+	CloudController *AccountCredentials `json:"cloudController,omitempty"`
+
+	// Diagnostics credentials used for troubleshooting.
+	// Requires read-only privileges (~5 permissions).
+	// +optional
+	Diagnostics *AccountCredentials `json:"diagnostics,omitempty"`
+}
+
+// AccountCredentials holds vSphere account credentials for a component.
+// Supports multi-vCenter topologies via optional vCenter field override.
+type AccountCredentials struct {
+	// Username is the vCenter username for this component.
+	// +kubebuilder:validation:Required
+	Username string `json:"username"`
+
+	// Password is the vCenter password for this component.
+	// +kubebuilder:validation:Required
+	Password string `json:"password"`
+
+	// VCenter is the vCenter server FQDN override for this component.
+	// When specified, this component will use credentials for a different vCenter
+	// than the default Platform.DeprecatedVCenter. This enables multi-vCenter topologies
+	// where different components connect to different vCenter servers.
+	// +optional
+	VCenter string `json:"vCenter,omitempty"`
 }
 
 // FailureDomain holds the region and zone failure domain and

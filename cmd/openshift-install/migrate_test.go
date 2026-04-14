@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -22,6 +23,73 @@ func TestMigration_HappyPath(t *testing.T) {
 
 	// Given: Existing cluster in passthrough mode with single admin account
 	clientset := fake.NewSimpleClientset()
+
+	// Create required namespaces
+	namespaces := []string{
+		"kube-system",
+		"openshift-machine-api",
+		"openshift-cluster-csi-drivers",
+		"openshift-cloud-controller-manager",
+		"openshift-config",
+	}
+	for _, ns := range namespaces {
+		_, err := clientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{Name: ns},
+		}, metav1.CreateOptions{})
+		if err != nil {
+			t.Fatalf("failed to create namespace %s: %v", ns, err)
+		}
+	}
+
+	// Create mock operator deployments
+	replicas := int32(1)
+	operatorDeployments := []*appsv1.Deployment{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "machine-api-operator",
+				Namespace: "openshift-machine-api",
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+			},
+			Status: appsv1.DeploymentStatus{
+				Replicas:      1,
+				ReadyReplicas: 1,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "vmware-vsphere-csi-driver-controller",
+				Namespace: "openshift-cluster-csi-drivers",
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+			},
+			Status: appsv1.DeploymentStatus{
+				Replicas:      1,
+				ReadyReplicas: 1,
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "vsphere-cloud-controller-manager",
+				Namespace: "openshift-cloud-controller-manager",
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+			},
+			Status: appsv1.DeploymentStatus{
+				Replicas:      1,
+				ReadyReplicas: 1,
+			},
+		},
+	}
+	for _, deploy := range operatorDeployments {
+		_, err := clientset.AppsV1().Deployments(deploy.Namespace).Create(ctx, deploy, metav1.CreateOptions{})
+		if err != nil {
+			t.Fatalf("failed to create deployment %s/%s: %v", deploy.Namespace, deploy.Name, err)
+		}
+	}
 
 	// Create original passthrough secret
 	originalSecret := &corev1.Secret{

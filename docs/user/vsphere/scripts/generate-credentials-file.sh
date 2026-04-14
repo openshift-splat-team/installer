@@ -68,10 +68,10 @@ if [ -f "$CREDENTIALS_FILE" ]; then
     log_info "Backed up existing file to: $BACKUP_FILE"
 fi
 
-# Generate YAML credentials file
+# Generate credentials file
 log_info "Generating credentials file at: $CREDENTIALS_FILE"
 
-cat > "$CREDENTIALS_FILE" << 'YAML_TEMPLATE'
+cat > "$CREDENTIALS_FILE" << 'CREDENTIALS_TEMPLATE'
 # OpenShift vSphere Per-Component Credentials File
 # ================================================
 #
@@ -107,7 +107,7 @@ cat > "$CREDENTIALS_FILE" << 'YAML_TEMPLATE'
 #   - Run: chmod 0600 ~/.vsphere/credentials
 #   - The installer will automatically read this file if install-config.yaml doesn't contain credentials
 #
-YAML_TEMPLATE
+CREDENTIALS_TEMPLATE
 
 # Add vCenter sections
 for vcenter in "${VCENTERS[@]}"; do

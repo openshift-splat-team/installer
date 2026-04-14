@@ -488,7 +488,6 @@ Or view in code:
 - [vSphere Installation Guide](install.md)
 - [vSphere Privileges (Legacy)](privileges.md)
 - [vSphere Requirements](requirements.md)
-- [OpenShift Enhancement Proposal](https://github.com/openshift/enhancements/pull/XXXX) (TODO: update link)
 
 ## FAQ
 

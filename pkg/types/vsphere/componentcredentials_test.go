@@ -171,6 +171,15 @@ func TestComponentCredentialsParsing_AdversarialCases(t *testing.T) {
 			user:     strings.Repeat("a", 1025),
 			password: "pass",
 		},
+		{
+			// Whitespace-only username must be preserved by the parser
+			// (validation, not parsing, is responsible for rejecting it).
+			// buildInstallConfigYAML uses quoted YAML scalars so spaces are
+			// not stripped by YAML plain-scalar normalization.
+			name:     "whitespace-only username accepted by parser",
+			user:     "   ",
+			password: "somepass",
+		},
 	}
 
 	for _, tc := range cases {
@@ -232,6 +241,8 @@ platform:
 // ---------------------------------------------------------------------------
 
 func buildInstallConfigYAML(user, password string) string {
+	// Use quoted YAML scalars so whitespace-only and empty values are preserved
+	// exactly as given instead of being normalized by YAML plain-scalar rules.
 	return `
 metadata:
   name: test-cluster
@@ -246,8 +257,8 @@ platform:
           - DC0
         componentCredentials:
           machineAPI:
-            user: ` + user + `
-            password: ` + password + `
+            user: "` + user + `"
+            password: "` + password + `"
 `
 }
 

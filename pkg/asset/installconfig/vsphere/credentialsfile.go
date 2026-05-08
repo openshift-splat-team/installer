@@ -25,7 +25,7 @@ func ValidateCredentialsFilePermissions(path string) error {
 
 	mode := info.Mode().Perm()
 	if mode != 0600 {
-		return fmt.Errorf("credentials file has insecure permissions (%04o). Must be 0600", mode)
+		return fmt.Errorf("Credentials file has insecure permissions (%04o). Must be 0600.", mode)
 	}
 
 	dirInfo, err := os.Stat(filepath.Dir(path))

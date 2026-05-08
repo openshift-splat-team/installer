@@ -999,24 +999,20 @@ func TestValidateComponentCredentials(t *testing.T) {
 		{
 			name: "valid component credentials - all components",
 			creds: &vsphere.ComponentCredentials{
-				Installer: &vsphere.ComponentCredential{
-					Username: "installer@vsphere.local",
-					Password: "password123",
-				},
-				MachineAPI: &vsphere.ComponentCredential{
-					Username: "machine-api@vsphere.local",
+				MachineAPI: &vsphere.Credential{
+					User:     "machine-api@vsphere.local",
 					Password: "password456",
 				},
-				Storage: &vsphere.ComponentCredential{
-					Username: "storage@vsphere.local",
+				CSIDriver: &vsphere.Credential{
+					User:     "csi@vsphere.local",
 					Password: "password789",
 				},
-				CloudController: &vsphere.ComponentCredential{
-					Username: "cloud-controller@vsphere.local",
+				CloudController: &vsphere.Credential{
+					User:     "cloud-controller@vsphere.local",
 					Password: "passwordabc",
 				},
-				Diagnostics: &vsphere.ComponentCredential{
-					Username: "diagnostics@vsphere.local",
+				Diagnostics: &vsphere.Credential{
+					User:     "diagnostics@vsphere.local",
 					Password: "passworddef",
 				},
 			},
@@ -1025,12 +1021,12 @@ func TestValidateComponentCredentials(t *testing.T) {
 		{
 			name: "valid partial credentials - runtime only",
 			creds: &vsphere.ComponentCredentials{
-				MachineAPI: &vsphere.ComponentCredential{
-					Username: "machine-api@vsphere.local",
+				MachineAPI: &vsphere.Credential{
+					User:     "machine-api@vsphere.local",
 					Password: "password",
 				},
-				Storage: &vsphere.ComponentCredential{
-					Username: "storage@vsphere.local",
+				CSIDriver: &vsphere.Credential{
+					User:     "csi@vsphere.local",
 					Password: "password",
 				},
 			},
@@ -1039,8 +1035,8 @@ func TestValidateComponentCredentials(t *testing.T) {
 		{
 			name: "invalid - empty username",
 			creds: &vsphere.ComponentCredentials{
-				MachineAPI: &vsphere.ComponentCredential{
-					Username: "", // Empty username
+				MachineAPI: &vsphere.Credential{
+					User:     "", // Empty username
 					Password: "password",
 				},
 			},
@@ -1050,8 +1046,8 @@ func TestValidateComponentCredentials(t *testing.T) {
 		{
 			name: "invalid - empty password",
 			creds: &vsphere.ComponentCredentials{
-				MachineAPI: &vsphere.ComponentCredential{
-					Username: "machine-api@vsphere.local",
+				MachineAPI: &vsphere.Credential{
+					User:     "machine-api@vsphere.local",
 					Password: "", // Empty password
 				},
 			},
@@ -1061,8 +1057,8 @@ func TestValidateComponentCredentials(t *testing.T) {
 		{
 			name: "invalid - malformed username",
 			creds: &vsphere.ComponentCredentials{
-				MachineAPI: &vsphere.ComponentCredential{
-					Username: "invalid username with spaces",
+				MachineAPI: &vsphere.Credential{
+					User:     "invalid username with spaces",
 					Password: "password",
 				},
 			},

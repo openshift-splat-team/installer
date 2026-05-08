@@ -34,7 +34,7 @@ func TestCredentialsFilePermissions(t *testing.T) {
 			fileMode:    0644,
 			dirMode:     0700,
 			wantErr:     true,
-			errContains: "insecure permissions (0644). Must be 0600",
+			errContains: "Credentials file has insecure permissions (0644). Must be 0600.",
 		},
 		{
 			name:        "0666 file rejected",
@@ -65,7 +65,7 @@ func TestCredentialsFilePermissions(t *testing.T) {
 			fileMode:    0400,
 			dirMode:     0700,
 			wantErr:     true,
-			errContains: "insecure permissions (0400). Must be 0600",
+			errContains: "Credentials file has insecure permissions (0400). Must be 0600.",
 		},
 	}
 

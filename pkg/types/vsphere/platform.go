@@ -311,6 +311,12 @@ type VCenter struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
 	Datacenters []string `json:"datacenters"`
+	// ComponentCredentials holds per-component vCenter credentials enabling
+	// privilege separation between provisioning and day-2 operations.
+	// When present, install-config.yaml values take precedence over
+	// credentials supplied via ~/.vsphere/credentials.
+	// +optional
+	ComponentCredentials *ComponentCredentials `json:"componentCredentials,omitempty"`
 }
 
 // Host defines host VMs to generate as part of the installation.

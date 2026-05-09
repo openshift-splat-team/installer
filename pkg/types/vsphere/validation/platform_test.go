@@ -1026,3 +1026,239 @@ func installConfig() *installConfigBuilder {
 func (icb *installConfigBuilder) build() *types.InstallConfig {
 	return &icb.InstallConfig
 }
+
+// TestValidateComponentCredentials tests validation of componentCredentials in install-config.yaml
+func TestValidateComponentCredentials(t *testing.T) {
+	tests := []struct {
+		name    string
+		creds   *vsphere.ComponentCredentials
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid component credentials - all components",
+			creds: &vsphere.ComponentCredentials{
+				MachineAPI: &vsphere.Credential{
+					User:     "machine-api@vsphere.local",
+					Password: "password456",
+				},
+				CSIDriver: &vsphere.Credential{
+					User:     "csi@vsphere.local",
+					Password: "password789",
+				},
+				CloudController: &vsphere.Credential{
+					User:     "cloud-controller@vsphere.local",
+					Password: "passwordabc",
+				},
+				Diagnostics: &vsphere.Credential{
+					User:     "diagnostics@vsphere.local",
+					Password: "passworddef",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid partial credentials - runtime only",
+			creds: &vsphere.ComponentCredentials{
+				MachineAPI: &vsphere.Credential{
+					User:     "machine-api@vsphere.local",
+					Password: "password",
+				},
+				CSIDriver: &vsphere.Credential{
+					User:     "csi@vsphere.local",
+					Password: "password",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid - empty username",
+			creds: &vsphere.ComponentCredentials{
+				MachineAPI: &vsphere.Credential{
+					User:     "", // Empty username
+					Password: "password",
+				},
+			},
+			wantErr: true,
+			errMsg:  "machineAPI username cannot be empty",
+		},
+		{
+			name: "invalid - empty password",
+			creds: &vsphere.ComponentCredentials{
+				MachineAPI: &vsphere.Credential{
+					User:     "machine-api@vsphere.local",
+					Password: "", // Empty password
+				},
+			},
+			wantErr: true,
+			errMsg:  "machineAPI password cannot be empty",
+		},
+		{
+			name: "invalid - malformed username",
+			creds: &vsphere.ComponentCredentials{
+				MachineAPI: &vsphere.Credential{
+					User:     "invalid username with spaces",
+					Password: "password",
+				},
+			},
+			wantErr: true,
+			errMsg:  "invalid username format",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// TODO: Implement validation function
+			// err := ValidateComponentCredentials(tt.creds, field.NewPath("test"))
+			// Validate error matches expectations
+			t.Skip("Implementation pending - Story #16")
+		})
+	}
+}
+
+// TestValidateCredentialsFile tests validation of ~/.vsphere/credentials.yaml file
+func TestValidateCredentialsFile(t *testing.T) {
+	tests := []struct {
+		name         string
+		fileContent  string
+		wantErr      bool
+		errMsg       string
+		expectedVCs  []string
+		expectedKeys []string
+	}{
+		{
+			name: "valid credentials file - single vCenter",
+			fileContent: `vcenters:
+  vcenter1.example.com:
+    installer:
+      username: installer@vsphere.local
+      password: pass1
+    machine_api:
+      username: machine-api@vsphere.local
+      password: pass2
+`,
+			wantErr:      false,
+			expectedVCs:  []string{"vcenter1.example.com"},
+			expectedKeys: []string{"installer", "machine_api"},
+		},
+		{
+			name: "valid credentials file - multi vCenter",
+			fileContent: `vcenters:
+  vcenter1.example.com:
+    installer:
+      username: installer@vsphere.local
+      password: pass1
+    machine_api:
+      username: machine-api@vsphere.local
+      password: pass2
+  vcenter2.example.com:
+    installer:
+      username: installer@vc2.local
+      password: pass3
+    storage:
+      username: storage@vc2.local
+      password: pass4
+`,
+			wantErr:      false,
+			expectedVCs:  []string{"vcenter1.example.com", "vcenter2.example.com"},
+			expectedKeys: []string{"installer", "machine_api", "storage"},
+		},
+		{
+			name: "invalid YAML format",
+			fileContent: `vcenters:
+  vcenter1.example.com
+    - invalid: yaml
+`,
+			wantErr: true,
+			errMsg:  "invalid YAML format",
+		},
+		{
+			name: "missing vcenters key",
+			fileContent: `other_field:
+  value: test
+`,
+			wantErr: true,
+			errMsg:  "vcenters key is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// TODO: Implement credentials file parsing and validation
+			// Parse YAML file content
+			// Validate structure
+			// Verify vCenters and component keys
+			t.Skip("Implementation pending - Story #16")
+		})
+	}
+}
+
+// TestValidateMultiVCenterCredentials tests multi-vCenter credential validation
+func TestValidateMultiVCenterCredentials(t *testing.T) {
+	tests := []struct {
+		name     string
+		platform *vsphere.Platform
+		wantErr  bool
+		errMsg   string
+	}{
+		{
+			name: "valid - credentials for all vCenters",
+			platform: func() *vsphere.Platform {
+				p := validPlatform()
+				p.VCenters = []vsphere.VCenter{
+					{Server: "vcenter1.example.com", Datacenters: []string{"DC1"}},
+					{Server: "vcenter2.example.com", Datacenters: []string{"DC2"}},
+				}
+				// ComponentCredentials covering all vCenters would be added here
+				return p
+			}(),
+			wantErr: false,
+		},
+		{
+			name: "invalid - missing credentials for vcenter2",
+			platform: func() *vsphere.Platform {
+				p := validPlatform()
+				p.VCenters = []vsphere.VCenter{
+					{Server: "vcenter1.example.com", Datacenters: []string{"DC1"}},
+					{Server: "vcenter2.example.com", Datacenters: []string{"DC2"}},
+				}
+				// Missing vcenter2 credentials
+				return p
+			}(),
+			wantErr: true,
+			errMsg:  "credentials missing for vCenter: vcenter2.example.com",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// TODO: Implement multi-vCenter validation
+			// Ensure credentials exist for each configured vCenter
+			t.Skip("Implementation pending - Story #16")
+		})
+	}
+}
+
+// TestValidateComponentNames tests that only valid component names are accepted
+func TestValidateComponentNames(t *testing.T) {
+	validComponents := []string{"installer", "machineAPI", "storage", "cloudController", "diagnostics"}
+	invalidComponents := []string{"unknown", "custom", "foo"}
+
+	t.Run("valid component names", func(t *testing.T) {
+		for _, comp := range validComponents {
+			t.Run(comp, func(t *testing.T) {
+				// TODO: Validate component name is in allowed list
+				t.Skip("Implementation pending - Story #16")
+			})
+		}
+	})
+
+	t.Run("invalid component names", func(t *testing.T) {
+		for _, comp := range invalidComponents {
+			t.Run(comp, func(t *testing.T) {
+				// TODO: Validate component name is rejected
+				t.Skip("Implementation pending - Story #16")
+			})
+		}
+	})
+}

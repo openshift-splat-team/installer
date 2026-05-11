@@ -160,12 +160,12 @@ func TestGenerateComponentSecrets(t *testing.T) {
 
 			if !tt.shouldGenerate {
 				assert.Len(t, asset.Secrets, 0)
-				assert.Len(t, asset.Files, 0)
+				assert.Len(t, asset.Files(), 0)
 				return
 			}
 
 			assert.Len(t, asset.Secrets, tt.expectedSecrets)
-			assert.Len(t, asset.Files, tt.expectedSecrets)
+			assert.Len(t, asset.Files(), tt.expectedSecrets)
 
 			// Verify expected secret names
 			for _, name := range tt.expectedNames {
@@ -477,7 +477,7 @@ func TestAtomicSecretCreation(t *testing.T) {
 	// Atomic means: if any secret fails, Generate() would return error
 	expectedSecrets := 4 // installer, machineAPI, storage, cloud-credentials
 	assert.Len(t, asset.Secrets, expectedSecrets)
-	assert.Len(t, asset.Files, expectedSecrets)
+	assert.Len(t, asset.Files(), expectedSecrets)
 
 	// Verify Files() returns same count
 	files := asset.Files()

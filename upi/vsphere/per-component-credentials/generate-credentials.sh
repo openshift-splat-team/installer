@@ -30,8 +30,15 @@ mkdir -p "${OUTPUT_DIR}"
 chmod 0700 "${OUTPUT_DIR}"
 
 IFS=',' read -ra VCENTER_LIST <<< "${VSPHERE_HOSTNAMES}"
-if [[ ${#VCENTER_LIST[@]} -eq 0 || -z "${VCENTER_LIST[0]}" ]]; then
-  echo "ERROR: VSPHERE_HOSTNAMES is empty; at least one vCenter FQDN is required" >&2
+
+FILTERED_VCENTER_LIST=()
+for VCENTER in "${VCENTER_LIST[@]}"; do
+  VCENTER="$(echo "${VCENTER}" | xargs)"  # trim whitespace
+  [[ -n "${VCENTER}" ]] && FILTERED_VCENTER_LIST+=("${VCENTER}")
+done
+
+if [[ ${#FILTERED_VCENTER_LIST[@]} -eq 0 ]]; then
+  echo "ERROR: VSPHERE_HOSTNAMES contains no valid vCenter FQDNs (got empty or whitespace-only tokens)" >&2
   exit 1
 fi
 
@@ -41,12 +48,7 @@ fi
   echo "# Fill in the password fields before use."
   echo ""
 
-  for VCENTER in "${VCENTER_LIST[@]}"; do
-    VCENTER="$(echo "${VCENTER}" | xargs)"  # trim whitespace
-    if [[ -z "${VCENTER}" ]]; then
-      continue
-    fi
-
+  for VCENTER in "${FILTERED_VCENTER_LIST[@]}"; do
     cat <<EOF
 ${VCENTER}:
   machineAPI:

@@ -9,7 +9,7 @@ vCenter credentials during OpenShift installation.
 
 **Error example:**
 
-```
+```text
 Credential validation failed for machineAPI on vcenter1.example.com: missing privileges: [VirtualMachine.Inventory.Create]
 ```
 
@@ -100,7 +100,7 @@ The table below lists every required privilege. Use it to cross-check your roles
 
 **Error example:**
 
-```
+```text
 Credential validation failed for machineAPI on vcenter1.example.com: authentication error: 535 5.7.8 Error: authentication credentials invalid
 ```
 
@@ -132,7 +132,7 @@ Update `~/.vsphere/credentials` with the corrected values and re-run the install
 
 **Error example:**
 
-```
+```text
 credentials file ~/.vsphere/credentials has insecure permissions 0644; expected 0600
 ```
 
@@ -161,7 +161,7 @@ rotate all passwords referenced in the file before correcting permissions.
 
 **Error example:**
 
-```
+```text
 install-config.yaml: componentCredentials.machineAPI is set but componentCredentials.csiDriver is missing
 ```
 

@@ -240,7 +240,7 @@ configured component credential it:
 
 Example error output when a privilege is missing:
 
-```
+```text
 FATAL: failed to create cluster: Credential validation failed for machineAPI on vcenter1.example.com: missing privileges: [VirtualMachine.Inventory.Create]
 ```
 

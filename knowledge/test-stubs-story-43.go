@@ -60,7 +60,9 @@ import (
 // oc runs an oc command and returns combined stdout+stderr.
 func oc(t *testing.T, args ...string) string {
 	t.Helper()
-	cmd := exec.CommandContext(context.Background(), "oc", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "oc", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("oc %s: %v\n%s", strings.Join(args, " "), err, out)
@@ -68,10 +70,17 @@ func oc(t *testing.T, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// ocAllowFail runs oc and returns output without failing the test on error.
-func ocAllowFail(args ...string) (string, error) {
-	out, err := exec.Command("oc", args...).CombinedOutput()
+// runAllowFail runs an arbitrary command and returns output without failing the test on error.
+func runAllowFail(bin string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, bin, args...).CombinedOutput()
 	return strings.TrimSpace(string(out)), err
+}
+
+// ocAllowFail runs oc without failing the test on error.
+func ocAllowFail(args ...string) (string, error) {
+	return runAllowFail("oc", args...)
 }
 
 // requireKubeconfig skips when KUBECONFIG is not set.
@@ -389,7 +398,6 @@ func TestE2E_CredentialRotation_MachineAPIFunctional_AfterRotation(t *testing.T)
 //                   access with a service account missing VirtualMachine.Inventory.Create.
 func TestE2E_MissingPrivilege_PreFlightBlocks_ExactErrorFormat(t *testing.T) {
 	t.Skip("E2E: requires installer binary + vSphere account with missing VirtualMachine.Inventory.Create (Story #43 not yet implemented)")
-	requireKubeconfig(t)
 
 	installerBin := os.Getenv("OPENSHIFT_INSTALL_BINARY")
 	if installerBin == "" {
@@ -443,7 +451,7 @@ func TestE2E_VCenterAuditLogs_DistinctServiceAccountPrincipals(t *testing.T) {
 	}
 
 	// govc events returns recent vCenter events including the user principal.
-	out, err := ocAllowFail("govc", "events", "-server", vcenter, "-json")
+	out, err := runAllowFail("govc", "events", "-server", vcenter, "-json")
 	if err != nil {
 		t.Skipf("govc events failed (tool not available or no access): %v", err)
 	}

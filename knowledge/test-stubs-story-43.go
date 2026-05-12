@@ -312,7 +312,7 @@ func TestE2E_CredentialRotation_UpdateMachineAPISecret(t *testing.T) {
 
 	// Patch the secret with new credentials.
 	patch := fmt.Sprintf(
-		`{"data":{"%s.username":"%s","%s.password":"%s"}}`,
+		`{"stringData":{"%s.username":"%s","%s.password":"%s"}}`,
 		vcenter, rotatedUser,
 		vcenter, rotatedPass,
 	)
@@ -509,14 +509,14 @@ func TestE2E_CredentialRotation_Concurrent_BothComponentsStable(t *testing.T) {
 	errs := make(chan error, 2)
 
 	go func() {
-		patch := fmt.Sprintf(`{"data":{"%s.username":"%s"}}`, vcenter, rotatedMachineAPIUser)
+		patch := fmt.Sprintf(`{"stringData":{"%s.username":"%s"}}`, vcenter, rotatedMachineAPIUser)
 		_, err := ocAllowFail("patch", "secret", "vsphere-machine-api-creds", "-n", "kube-system",
 			"--type=merge", "-p", patch)
 		errs <- err
 	}()
 
 	go func() {
-		patch := fmt.Sprintf(`{"data":{"%s.username":"%s"}}`, vcenter, rotatedCSIUser)
+		patch := fmt.Sprintf(`{"stringData":{"%s.username":"%s"}}`, vcenter, rotatedCSIUser)
 		_, err := ocAllowFail("patch", "secret", "vsphere-storage-creds", "-n", "kube-system",
 			"--type=merge", "-p", patch)
 		errs <- err

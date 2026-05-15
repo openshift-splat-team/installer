@@ -31,6 +31,7 @@ git commit -m "Update vendor directory"
 **What it checks:**
 - Uses `.golangci.yaml` configuration
 - Runs all configured linters
+- Excludes vendor/ directory (third-party code)
 
 **How to fix failures:**
 ```bash
@@ -46,15 +47,16 @@ golangci-lint run --config .golangci.yaml
 **Runs on:** PRs and pushes to master/main
 
 **What it checks:**
-- gofmt formatting
-- goimports (warning only)
+- gofmt formatting (excludes vendor/)
+- goimports (warning only, excludes vendor/)
 
 **How to fix failures:**
 ```bash
-gofmt -w .
+# Format all non-vendor Go files
+find . -name '*.go' -not -path './vendor/*' -exec gofmt -w {} \;
 # Or use goimports for import organization too
 go install golang.org/x/tools/cmd/goimports@latest
-goimports -w .
+find . -name '*.go' -not -path './vendor/*' -exec goimports -w {} \;
 ```
 
 ---

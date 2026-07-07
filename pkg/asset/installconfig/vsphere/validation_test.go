@@ -878,3 +878,21 @@ func Test_compareCurrentToTemplate(t *testing.T) {
 		})
 	}
 }
+
+// TestInstallConfigValidation_ComponentCredentials validates full install-config with componentCredentials
+func TestInstallConfigValidation_ComponentCredentials(t *testing.T) {
+	// TODO: Create full install-config YAML with componentCredentials
+	// TODO: Parse install-config
+	// TODO: Run validation
+	// TODO: Assert all component credentials are parsed correctly
+	t.Skip("Implementation pending")
+}
+
+// TestInstallConfigValidation_LegacyMode validates install-config with legacy credentials
+func TestInstallConfigValidation_LegacyMode(t *testing.T) {
+	// TODO: Create full install-config YAML with only username/password
+	// TODO: Parse install-config
+	// TODO: Run validation
+	// TODO: Assert passthrough mode is detected
+	t.Skip("Implementation pending")
+}

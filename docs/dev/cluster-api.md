@@ -31,3 +31,73 @@ The binaries are built and packaged during the standard installer build process,
 To build an `openshift-install` binary with Cluster API bundled:
 - Optionally `export SKIP_TERRAFORM=y` if you don't need to use Terraform.
 - Run `./hack/build.sh`, the binary is then produced in `bin/openshift-install`.
+
+### Overriding provider artifacts during development
+
+Iterating on an infrastructure provider normally means rebuilding the whole installer, because
+the provider binaries and component manifests are baked into `bin/openshift-install`. Two
+environment variables let you point a single provider at artifacts on disk instead:
+
+```sh
+OPENSHIFT_INSTALL_EXPERIMENTAL_CAPI_PROVIDER_<NAME>_BINARY=/path/to/controller
+OPENSHIFT_INSTALL_EXPERIMENTAL_CAPI_PROVIDER_<NAME>_COMPONENTS=/path/to/components.yaml
+```
+
+**These are a development aid and are not a supported installation interface.** They have no
+install-config equivalent, they are not versioned, using them logs a warning, and they may be
+changed or removed at any time. Do not use them on a cluster you care about.
+
+`<NAME>` is the provider name upper-cased, with `-` replaced by `_`. The variables are read
+per provider, so overriding one leaves the others on their embedded copies, and each of the
+two variables is independent — setting only `_BINARY` keeps the embedded component manifest.
+
+Valid names, from the infrastructure providers declared in `pkg/clusterapi/providers.go`:
+
+| Provider | Variable infix |
+| --- | --- |
+| `aws` | `AWS` |
+| `azure` | `AZURE` |
+| `azureaso` | `AZUREASO` |
+| `azurestack` | `AZURESTACK` |
+| `gcp` | `GCP` |
+| `ibmcloud` | `IBMCLOUD` |
+| `nutanix` | `NUTANIX` |
+| `openstack` | `OPENSTACK` |
+| `openstackorc` | `OPENSTACKORC` |
+| `vsphere` | `VSPHERE` |
+
+Two caveats about which names work:
+
+- **The core Cluster API controller and the envtest binaries cannot be overridden.** They are
+  unpacked before the provider machinery runs and never pass through the override lookup, so
+  `..._CLUSTER_API_BINARY` and `..._ENVTEST_BINARY` are accepted by your shell and then
+  **silently ignored** — no warning, no error. To change those, rebuild.
+- **`IBMCLOUD` also applies to Power VS installs**, since both platforms are served by the
+  `ibmcloud` provider.
+
+What is validated, and what is not:
+
+- The binary must be an existing, non-empty, executable regular file. If it is an ELF binary
+  it must match the machine type, word size and byte order of the running installer; non-ELF
+  executables such as shell wrappers are accepted without an architecture check, but a file
+  that *looks* like an ELF binary and cannot be parsed is rejected rather than passed through
+  to `exec`.
+- The components path may be either a single manifest file or a directory of manifests —
+  envtest reads both, though it does not recurse into subdirectories.
+- Paths are resolved to absolute form before use, so a bare filename refers to the file in
+  your working directory rather than to something found on `$PATH`.
+- Validation happens when the controller is started, which is **after** the local control
+  plane is running and, on most platforms, after the pre-provisioning hook has already created
+  cloud resources. A bad path fails the install; it does not prevent that earlier work. These
+  variables are a debugging aid, not a safety check.
+
+The path you supply and the SHA-256 of the binary are written to the installer log, so that a
+run can be traced back to an exact build. File contents are never logged. The path itself is
+logged verbatim, so avoid pointing these variables at locations you would rather not see in a
+support bundle.
+
+```sh
+make -C cluster-api bin/linux_amd64/cluster-api-provider-aws
+export OPENSHIFT_INSTALL_EXPERIMENTAL_CAPI_PROVIDER_AWS_BINARY="${PWD}/cluster-api/bin/linux_amd64/cluster-api-provider-aws"
+./bin/openshift-install create cluster --dir ./demo
+```

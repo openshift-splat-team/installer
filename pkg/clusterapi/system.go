@@ -613,8 +613,21 @@ type controller struct {
 
 // runController configures the controller, and waits for it to be ready.
 func (c *system) runController(ctx context.Context, ct *controller) error {
-	// If the provider is not empty, we extract it to the binaries directory.
+	// Developer-only override: when validated artifacts are supplied for this
+	// provider, use them in place of the embedded copies.
 	if ct.Provider != nil {
+		override, err := lookupArtifactOverride(ct.Provider.Name)
+		if err != nil {
+			return fmt.Errorf("failed to resolve artifact override for controller %q: %w", ct.Name, err)
+		}
+		if override != nil {
+			applyArtifactOverride(ct, override)
+		}
+	}
+
+	// If the provider is not empty, and we are not using an overridden binary,
+	// we extract it to the binaries directory.
+	if ct.Provider != nil && !ct.skipExtract {
 		if err := ct.Provider.Extract(c.lcp.BinDir); err != nil {
 			return fmt.Errorf("failed to extract provider %q: %w", ct.Name, err)
 		}

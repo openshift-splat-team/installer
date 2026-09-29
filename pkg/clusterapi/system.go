@@ -603,6 +603,12 @@ type controller struct {
 	Components []string
 	Args       []string
 	Env        map[string]string
+
+	// skipExtract suppresses extraction from the embedded mirror, and is set
+	// when Path already points at a validated developer-supplied binary.
+	// Provider deliberately stays non-nil: runController reads Provider.Name
+	// twice below for the azureaso kubeconfig special case.
+	skipExtract bool
 }
 
 // runController configures the controller, and waits for it to be ready.

@@ -96,8 +96,87 @@ run can be traced back to an exact build. File contents are never logged. The pa
 logged verbatim, so avoid pointing these variables at locations you would rather not see in a
 support bundle.
 
+### Testing the override
+
+The useful loop here needs no cloud account, no credentials and no pull secret. The local
+control plane is an envtest `etcd` and `kube-apiserver` started on your own machine, so a
+provider controller can be launched, watched and torn down without contacting anything.
+
+Nothing these tests create reaches an installed cluster. The local control plane is temporary
+and dies with the test.
+
+#### Prerequisite: populate the mirror
+
+`pkg/clusterapi/mirror/` is committed with only a `README`, so there is no embedded provider
+to compare against until a build produces the zip:
+
+```sh
+./hack/build.sh
+unzip -l pkg/clusterapi/mirror/cluster-api.zip | tail -3
+```
+
+Expect roughly 375 MB and 13 entries — the core `cluster-api` binary, ten providers, `etcd`
+and `kube-apiserver`. This takes several minutes and downloads the envtest binaries from a
+GitHub release, so the first build needs network access. Tests that need the mirror skip
+themselves when it is absent and name this script in the skip message; a missing artifact is
+a skip, not a failure.
+
+#### Unit tests
+
+```sh
+IS_CONTAINER=TRUE go test -short ./pkg/clusterapi/...
+```
+
+These cover path resolution, the validation rules and the architecture check in isolation.
+They never start a control plane, so they say nothing about whether the override reaches
+`exec` — that is what the integration test is for. `hack/go-test.sh` runs the same thing
+inside podman and also passes `-short`.
+
+#### Integration test: the real local control plane
+
+```sh
+go test -count=1 -p 1 -parallel 1 -timeout 0 -run .Integration ./pkg/clusterapi/...
+```
+
+About 15 seconds. Two arms, and the second matters as much as the first:
+
+- **Override arm** — points `..._AWS_BINARY` at a stub, starts it through the installer's own
+  controller startup path, and asserts the process was launched from the override and that the
+  embedded binary was never unpacked into the bin directory.
+- **Embedded arm** — sets no variables, runs the *real* embedded provider with the production
+  argument list, and waits for its `/healthz` to answer. This is the regression guarantee: it
+  is the evidence that the override changes nothing when you are not using it.
+
+**Do not reach for `hack/go-integration-test.sh` to run just these.** Its package list is
+hardcoded and `"$@"` is appended rather than substituted, so passing `./pkg/clusterapi/...`
+narrows nothing — it is already inside `./pkg/...`. You get the whole integration suite,
+including `cmd/openshift-install`'s `TestAgentIntegration`, which needs `oc`, `nmstatectl` and
+`registry.ci.openshift.org` credentials and fails without them. Use the `go test` invocation
+above while iterating; the script is what CI runs.
+
+#### Trying it by hand
+
+To watch the mechanism rather than assert on it, any executable will do — a shell wrapper is
+accepted, because the architecture check only applies to ELF files:
+
+```sh
+printf '#!/bin/sh\nexec sleep 300\n' > /tmp/fake-capa && chmod 0700 /tmp/fake-capa
+export OPENSHIFT_INSTALL_EXPERIMENTAL_CAPI_PROVIDER_AWS_BINARY=/tmp/fake-capa
+```
+
+The log then carries the path and its SHA-256 alongside the unsupported-configuration
+warning, which is how you confirm the resolver picked up what you meant.
+
+#### Against a real install
+
+This one does contact the cloud, costs money and needs credentials and a pull secret, so it
+is not part of the development loop:
+
 ```sh
 make -C cluster-api bin/linux_amd64/cluster-api-provider-aws
 export OPENSHIFT_INSTALL_EXPERIMENTAL_CAPI_PROVIDER_AWS_BINARY="${PWD}/cluster-api/bin/linux_amd64/cluster-api-provider-aws"
 ./bin/openshift-install create cluster --dir ./demo
 ```
+
+Remember the ordering caveat above: by the time the override is validated, pre-provisioning
+has already created cloud resources, so a typo here still leaves you with something to destroy.

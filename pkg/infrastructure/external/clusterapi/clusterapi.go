@@ -178,6 +178,18 @@ func (p Provider) PublicGatherEndpoint() infracapi.GatherEndpoint {
 func (p Provider) ValidateManifests(infra, machines []client.Object) error {
 	var clusters, infraObjs int
 	for _, o := range infra {
+		// A nil object is not hypothetical. On a re-entrant run
+		// (OPENSHIFT_INSTALL_REENTRANT=true) the Cluster asset is restored
+		// from .openshift_install_state.json, which persists only each
+		// RuntimeFile's Filename and Data -- never the decoded Object, which
+		// is an interface and is not serialised. The installer's own guests
+		// Namespace therefore comes back as a nil client.Object, and reading
+		// its kind panicked the installer with a stack trace instead of a
+		// message. Skipping it is right on its own terms too: validation
+		// counts what the *user* supplied, and a nil is nothing supplied.
+		if o == nil {
+			continue
+		}
 		if gvk, skewed := skewedCoreGVK(o); skewed {
 			return coreVersionSkewError(gvk)
 		}

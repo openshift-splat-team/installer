@@ -122,12 +122,32 @@ func (r Request) clusterDomain() string {
 // install that runs for forty minutes and then dies at a bootstrap stage with
 // no line pointing back at the cause.
 func Run(ctx context.Context, req Request) error {
-	program, err := resolveProgram(req.InstallDir, req.Program)
+	// Everything below needs an absolute install directory, and `--dir
+	// install-dir-x` makes a relative one the ordinary case.
+	//
+	// The exec path is the reason. cmd.Dir makes the child chdir into the
+	// install directory before it execs, so a program path that is itself
+	// relative gets resolved a second time, against the directory it already
+	// contains -- and the install fails with "no such file or directory" for a
+	// file the installer has just opened and digested one line earlier.
+	//
+	// The environment is the same bug seen from the hook's side, and quieter.
+	// A relative OPENSHIFT_INSTALL_STATE_DIR resolves against the hook's own
+	// working directory, so a hook that does the reasonable thing and creates
+	// the directory before writing to it would succeed, write its state
+	// somewhere nobody looks, and leave pre-destroy with nothing to read. What
+	// the hook created would then never be destroyed.
+	installDir, err := filepath.Abs(req.InstallDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve the install directory %s: %w", req.InstallDir, err)
+	}
+
+	program, err := resolveProgram(installDir, req.Program)
 	if err != nil {
 		return err
 	}
 
-	stateDir := filepath.Join(req.InstallDir, externaltypes.ManifestDir, externaltypes.HookStateDir)
+	stateDir := filepath.Join(installDir, externaltypes.ManifestDir, externaltypes.HookStateDir)
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create the hook state directory %s: %w", stateDir, err)
 	}
@@ -151,8 +171,8 @@ func Run(ctx context.Context, req Request) error {
 		"OPENSHIFT_INSTALL_BASE_DOMAIN="+req.BaseDomain,
 		"OPENSHIFT_INSTALL_CLUSTER_DOMAIN="+req.clusterDomain(),
 		"OPENSHIFT_INSTALL_PUBLISH="+req.Publish,
-		"OPENSHIFT_INSTALL_DIR="+req.InstallDir,
-		"OPENSHIFT_INSTALL_MANIFEST_DIR="+filepath.Join(req.InstallDir, externaltypes.ManifestDir),
+		"OPENSHIFT_INSTALL_DIR="+installDir,
+		"OPENSHIFT_INSTALL_MANIFEST_DIR="+filepath.Join(installDir, externaltypes.ManifestDir),
 		"OPENSHIFT_INSTALL_STATE_DIR="+stateDir,
 		"OPENSHIFT_INSTALL_CONTROL_PLANE_ENDPOINT_HOST="+req.ControlPlaneEndpointHost,
 		"OPENSHIFT_INSTALL_CONTROL_PLANE_ENDPOINT_PORT="+req.ControlPlaneEndpointPort,
@@ -190,7 +210,7 @@ func Run(ctx context.Context, req Request) error {
 	stderr := &logWriter{prefix: string(req.Kind)}
 
 	cmd := exec.CommandContext(ctx, program)
-	cmd.Dir = req.InstallDir
+	cmd.Dir = installDir
 	cmd.Env = env
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
@@ -212,6 +232,10 @@ func Run(ctx context.Context, req Request) error {
 
 // resolveProgram turns the configured relative path into an absolute one,
 // refusing anything that leaves the install directory or is not executable.
+//
+// installDir must already be absolute. The result is handed to exec.Cmd whose
+// Dir is that same directory, and a relative result would then be resolved
+// against it a second time; Run calls filepath.Abs before getting here.
 //
 // Both checks are here rather than at validation time because both need the
 // filesystem, and because this is the last moment before the program runs --

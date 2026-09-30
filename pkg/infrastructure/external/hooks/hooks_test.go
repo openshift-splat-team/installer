@@ -30,6 +30,51 @@ func writeHook(t *testing.T, rel, body string, mode os.FileMode) string {
 	return dir
 }
 
+// TestRunAcceptsARelativeInstallDir is a regression test for a real install
+// failure: `openshift-install create cluster --dir install-dir-mrb-ext11` died
+// with
+//
+//	failed to run the infra-ready hook hooks/infra-hook.sh:
+//	fork/exec install-dir-mrb-ext11/external-install/hooks/infra-hook.sh:
+//	no such file or directory
+//
+// one line after the installer had opened that same file and logged its
+// SHA-256. A relative --dir is the ordinary way to invoke the installer, and
+// every test above used t.TempDir(), which is absolute -- so the whole suite
+// passed while the only thing anyone actually runs was broken.
+//
+// The cause is that cmd.Dir makes the child chdir before it execs, so a
+// relative program path is resolved against the install directory a second
+// time. The assertion on OPENSHIFT_INSTALL_STATE_DIR guards the quieter half
+// of the same bug: a relative state directory would resolve against the
+// hook's working directory, and a hook that creates it before writing would
+// leave its state where pre-destroy will never look.
+func TestRunAcceptsARelativeInstallDir(t *testing.T) {
+	skipWithoutShell(t)
+
+	t.Chdir(t.TempDir())
+	rel := "install-dir-relative"
+	path := filepath.Join(rel, externaltypes.ManifestDir, "hooks/probe.sh")
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	// Executable on purpose: the bug under test is an exec failure, so a hook
+	// that could not have run anyway would make this pass for the wrong reason.
+	//nolint:gosec // G306: a hook has to be runnable to test how it is run.
+	require.NoError(t, os.WriteFile(path,
+		[]byte("#!/bin/sh\nprintf '%s' \"$OPENSHIFT_INSTALL_STATE_DIR\" > \"$OPENSHIFT_INSTALL_STATE_DIR/seen\"\n"),
+		0o755))
+
+	require.NoError(t, Run(context.Background(), Request{
+		Kind: InfraReady, Program: "hooks/probe.sh", InstallDir: rel,
+	}))
+
+	// Written by the hook itself, so it can only exist if the hook both ran
+	// and resolved the state directory to the place the installer meant.
+	seen, err := os.ReadFile(filepath.Join(rel, externaltypes.ManifestDir, externaltypes.HookStateDir, "seen"))
+	require.NoError(t, err)
+	assert.True(t, filepath.IsAbs(string(seen)),
+		"the hook must receive an absolute OPENSHIFT_INSTALL_STATE_DIR, got %q", string(seen))
+}
+
 func skipWithoutShell(t *testing.T) {
 	t.Helper()
 	if runtime.GOOS == "windows" {

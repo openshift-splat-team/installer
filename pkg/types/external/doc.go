@@ -27,6 +27,41 @@ const ManifestDir string = "external-install"
 // stage, after the infrastructure reports ready.
 const MachineManifestDir string = "machines"
 
+// ExtraManifestDir is the subdirectory of ManifestDir holding cluster
+// manifests the user wants applied during bootstrap, ahead of anything an
+// operator does.
+//
+// It exists because of what `platform: external` means. The installer
+// delivers no cloud controller manager -- `cloudControllerManager.state:
+// External` is a declaration that the partner supplies one -- and until a CCM
+// runs, every node keeps the
+// `node.cloudprovider.kubernetes.io/uninitialized` taint the kubelet applies
+// under `--cloud-provider=external`, no control-plane operator can schedule,
+// and bootstrap times out. So the one thing this platform cannot finish
+// without is the one thing it has no way to deliver.
+//
+// The existing answer is the "openshift" manifest directory, and it does not
+// work here. That directory is an asset load path: when the asset store finds
+// files in it, the Openshift asset is marked as loaded from disk and its
+// Generate is never called (pkg/asset/store/store.go:196-232), so a user who
+// drops one file there silently replaces every generated manifest. That is
+// why the CI job for this platform has to run `create manifests`, edit the
+// tree and then `create ignition-configs` as three separate commands. A
+// directory that is read during Generate rather than instead of it is what
+// makes a single `create cluster` possible.
+//
+// Files here are added to the openshift manifest directory, so bootkube moves
+// them in with the rest and cluster-bootstrap applies them to the bootstrap
+// control plane before it waits for the cluster to come up
+// (data/data/bootstrap/files/usr/local/bin/bootkube.sh.template:78). A
+// MachineConfig placed here is rendered by the bootstrap machine-config
+// server, so it reaches the control-plane machines on their first boot.
+//
+// The installer does not parse, validate or template anything here. It does
+// not know what a partner's CCM needs, and acquiring an opinion about it is
+// the coupling this platform exists to avoid.
+const ExtraManifestDir string = "extra-manifests"
+
 // HookStateDir is the subdirectory of ManifestDir a provisioning hook may use
 // to record what it created, so that the teardown hook can remove exactly
 // that.

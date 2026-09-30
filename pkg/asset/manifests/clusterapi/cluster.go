@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1" //nolint:staticcheck //CORS-3563
 	"sigs.k8s.io/yaml"
@@ -282,11 +283,31 @@ func (c *Cluster) Load(f asset.FileFetcher) (bool, error) {
 // hasNamespace reports whether the list already contains the guests namespace,
 // so that a user who does supply one does not get a duplicate that would fail
 // to create.
+//
+// The kind is taken from the Go type, not from TypeMeta. Every object this is
+// ever asked about came out of clusterapi.ObjectsFromManifest, and a typed
+// object produced by Scheme.Convert has an empty TypeMeta -- so asking
+// GetObjectKind() reports Kind="" for a Namespace that is plainly there, this
+// function returns false, a second namespace is appended, and Provision fails
+// with `namespaces "openshift-cluster-api-guests" already exists`. That is how
+// a second `openshift-install create cluster` over an already-generated
+// manifest directory used to die.
+//
+// Only a kind the installer has no type for stays unstructured, and for those
+// TypeMeta is the only thing there is, so both cases are handled.
 func hasNamespace(files []*asset.RuntimeFile) bool {
 	for _, f := range files {
-		gvk := f.Object.GetObjectKind().GroupVersionKind()
-		if gvk.Group == "" && gvk.Kind == "Namespace" && f.Object.GetName() == capiutils.Namespace {
+		if f.Object == nil || f.Object.GetName() != capiutils.Namespace {
+			continue
+		}
+		switch o := f.Object.(type) {
+		case *corev1.Namespace:
 			return true
+		case *unstructured.Unstructured:
+			gvk := o.GroupVersionKind()
+			if gvk.Group == "" && gvk.Kind == "Namespace" {
+				return true
+			}
 		}
 	}
 	return false

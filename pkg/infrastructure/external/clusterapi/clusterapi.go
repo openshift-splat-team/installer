@@ -55,6 +55,7 @@ var (
 	_ infracapi.PreProvider                   = Provider{}
 	_ infracapi.InfraReadyProvider            = Provider{}
 	_ infracapi.PostProvider                  = Provider{}
+	_ infracapi.IgnitionProvider              = Provider{}
 	_ infracapi.ManifestProvider              = Provider{}
 	_ infracapi.ManifestValidator             = Provider{}
 	_ infracapi.UnstructuredManifestTolerator = Provider{}

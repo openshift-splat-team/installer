@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1" //nolint:staticcheck //CORS-3563
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -189,4 +190,101 @@ func TestExtractIPAddressRejectsGoStructYAML(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"10.0.0.5"}, addrs,
 		"the status stanza is the one part both serializations agreed on")
+}
+
+// TestCheckMachineReadyFailedPhaseIsReported covers the defect where the
+// Failed branch of checkMachineReady was written as an `else if` after a test
+// that Failed already satisfies, making it unreachable. A machine that failed
+// to provision reported "not ready, keep waiting" and the install burned its
+// full timeout while the provider's own FailureMessage went unread.
+func TestCheckMachineReadyFailedPhaseIsReported(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		message *string
+		expect  string
+	}{
+		{
+			name:    "failure message is surfaced",
+			message: ptr.To("insufficient capacity in us-east-1a"),
+			expect:  "insufficient capacity in us-east-1a",
+		},
+		{
+			name:    "absent failure message still errors",
+			message: nil,
+			expect:  "machine.Status.FailureMessage was not set",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &clusterv1.Machine{
+				ObjectMeta: metav1.ObjectMeta{Name: "infra-bootstrap"},
+				Status: clusterv1.MachineStatus{
+					Phase:          string(clusterv1.MachinePhaseFailed),
+					FailureMessage: tc.message, //nolint:staticcheck // matches the field checkMachineReady reads
+				},
+			}
+
+			ready, err := checkMachineReady(m, false)
+
+			assert.False(t, ready)
+			require.Error(t, err, "a Failed machine must stop the wait, not extend it")
+			assert.Contains(t, err.Error(), tc.expect)
+			assert.Contains(t, err.Error(), "infra-bootstrap")
+		})
+	}
+}
+
+// TestCheckMachineReadyNonTerminalPhases pins the behaviour the Failed fix must
+// not disturb: a machine that is merely still working is not an error, and a
+// provisioned machine is ready once it has an address.
+func TestCheckMachineReadyNonTerminalPhases(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		phase     clusterv1.MachinePhase
+		addresses []clusterv1.MachineAddress
+		ready     bool
+	}{
+		{
+			name:  "pending is not ready and not an error",
+			phase: clusterv1.MachinePhasePending,
+			ready: false,
+		},
+		{
+			name:  "provisioning is not ready and not an error",
+			phase: clusterv1.MachinePhaseProvisioning,
+			ready: false,
+		},
+		{
+			name:      "provisioned without an address is not ready",
+			phase:     clusterv1.MachinePhaseProvisioned,
+			addresses: nil,
+			ready:     false,
+		},
+		{
+			name:      "provisioned with an internal address is ready",
+			phase:     clusterv1.MachinePhaseProvisioned,
+			addresses: []clusterv1.MachineAddress{{Type: clusterv1.MachineInternalIP, Address: "10.0.1.5"}},
+			ready:     true,
+		},
+		{
+			name:      "running with an external address is ready",
+			phase:     clusterv1.MachinePhaseRunning,
+			addresses: []clusterv1.MachineAddress{{Type: clusterv1.MachineExternalIP, Address: "203.0.113.7"}},
+			ready:     true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &clusterv1.Machine{
+				ObjectMeta: metav1.ObjectMeta{Name: "infra-master-0"},
+				Status: clusterv1.MachineStatus{
+					Phase:     string(tc.phase),
+					Addresses: tc.addresses,
+				},
+			}
+
+			ready, err := checkMachineReady(m, false)
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.ready, ready)
+		})
+	}
 }

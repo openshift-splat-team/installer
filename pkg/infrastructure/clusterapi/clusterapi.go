@@ -722,14 +722,23 @@ func (i *InfraProvider) collectManifests(ctx context.Context, cl client.Client) 
 
 func checkMachineReady(machine *clusterv1.Machine, requirePublicIP bool) (bool, error) {
 	logrus.Debugf("Checking that machine %s has provisioned...", machine.Name)
+	// Failed is checked before the not-yet-provisioned case, not after it.
+	// Failed is neither Provisioned nor Running, so testing it second made the
+	// branch unreachable and turned every provisioning failure into a silent
+	// fifteen-minute timeout with the provider's own explanation discarded.
+	// A CAPI machine reaches Failed only once FailureReason/FailureMessage is
+	// set, which the contract defines as terminal, so there is nothing to wait
+	// for. This matters most for platform: external, where the provider's
+	// FailureMessage is the only account of the failure the installer has.
+	if machine.Status.Phase == string(clusterv1.MachinePhaseFailed) {
+		//TODO: We need to update this to use non deprecated field
+		msg := ptr.Deref(machine.Status.FailureMessage, "machine.Status.FailureMessage was not set") //nolint:staticcheck
+		return false, fmt.Errorf("machine %s failed to provision: %s", machine.Name, msg)
+	}
 	if machine.Status.Phase != string(clusterv1.MachinePhaseProvisioned) &&
 		machine.Status.Phase != string(clusterv1.MachinePhaseRunning) {
 		logrus.Debugf("Machine %s has not yet provisioned: %s", machine.Name, machine.Status.Phase)
 		return false, nil
-	} else if machine.Status.Phase == string(clusterv1.MachinePhaseFailed) {
-		//TODO: We need to update this to use non deprecated field
-		msg := ptr.Deref(machine.Status.FailureMessage, "machine.Status.FailureMessage was not set") //nolint:staticcheck
-		return false, fmt.Errorf("machine %s failed to provision: %s", machine.Name, msg)
 	}
 	logrus.Debugf("Machine %s has status: %s", machine.Name, machine.Status.Phase)
 	return hasRequiredIP(machine, requirePublicIP), nil

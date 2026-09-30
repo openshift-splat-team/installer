@@ -10,10 +10,8 @@ import (
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1" //nolint:staticcheck //CORS-3563
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/installer/pkg/asset"
@@ -147,7 +145,14 @@ func (c *Cluster) Generate(_ context.Context, dependencies asset.Parents) error 
 		if err != nil {
 			return fmt.Errorf("failed to generate IBM Cloud VPC manifests: %w", err)
 		}
-	case externaltypes.Name, nonetypes.Name, baremetaltypes.Name:
+	case externaltypes.Name:
+		// The installer generates no Cluster and no infrastructure object for
+		// this platform -- the user supplies them, and Load reads them. Only
+		// the namespace is generated, and unlike the none and baremetal cases
+		// below it has to be marshalled and given its manifest-dir path,
+		// because for External these files are really applied.
+		return c.finalize()
+	case nonetypes.Name, baremetaltypes.Name:
 		return nil
 	default:
 		return fmt.Errorf("unsupported platform %q", platform)
@@ -178,7 +183,12 @@ func (c *Cluster) Generate(_ context.Context, dependencies asset.Parents) error 
 	// Append the infrastructure manifests.
 	c.FileList = append(c.FileList, out.Manifests...)
 
-	// Create the infrastructure manifests.
+	return c.finalize()
+}
+
+// finalize marshals every generated object and moves it under the manifest
+// directory.
+func (c *Cluster) finalize() error {
 	for _, m := range c.FileList {
 		objData, err := yaml.Marshal(m.Object)
 		if err != nil {
@@ -229,26 +239,72 @@ func (c *Cluster) Load(f asset.FileFetcher) (bool, error) {
 	fileList = append(fileList, jsonFileList...)
 
 	for _, file := range fileList {
-		u := &unstructured.Unstructured{}
-		if err := yaml.Unmarshal(file.Data, u); err != nil {
-			return false, errors.Wrap(err, "failed to unmarshal file")
-		}
-		obj, err := clusterapi.Scheme.New(u.GroupVersionKind())
+		decoded, err := clusterapi.ObjectsFromManifest(file.Filename, file.Data)
 		if err != nil {
-			return false, errors.Wrap(err, "failed to create object")
+			return false, err
 		}
-		if err := clusterapi.Scheme.Convert(u, obj, nil); err != nil {
-			return false, errors.Wrap(err, "failed to convert object")
+		for i, d := range decoded {
+			name := file.Filename
+			if len(decoded) > 1 {
+				ext := filepath.Ext(name)
+				name = fmt.Sprintf("%s-%d%s", strings.TrimSuffix(name, ext), i+1, ext)
+			}
+			c.FileList = append(c.FileList, &asset.RuntimeFile{
+				File:   asset.File{Filename: name, Data: d.Data},
+				Object: d.Object,
+			})
 		}
-		c.FileList = append(c.FileList, &asset.RuntimeFile{
-			File: asset.File{
-				Filename: file.Filename,
-				Data:     file.Data,
-			},
-			Object: obj.(client.Object),
-		})
+	}
+
+	if len(c.FileList) == 0 {
+		return false, nil
+	}
+
+	// Generate always emits the guests namespace, and Provision creates every
+	// manifest into it (pkg/infrastructure/clusterapi/clusterapi.go). Loading
+	// from disk replaces the generated list wholesale, so without this the
+	// namespace is simply absent and the first create fails with
+	// `namespaces "openshift-cluster-api-guests" not found`. Users are not
+	// told to write a Namespace manifest, so the invariant is restored here
+	// rather than required of them.
+	if !hasNamespace(c.FileList) {
+		nsFile, err := namespaceRuntimeFile()
+		if err != nil {
+			return false, err
+		}
+		c.FileList = append(c.FileList, nsFile)
 	}
 
 	asset.SortManifestFiles(c.FileList)
-	return len(c.FileList) > 0, nil
+	return true, nil
+}
+
+// hasNamespace reports whether the list already contains the guests namespace,
+// so that a user who does supply one does not get a duplicate that would fail
+// to create.
+func hasNamespace(files []*asset.RuntimeFile) bool {
+	for _, f := range files {
+		gvk := f.Object.GetObjectKind().GroupVersionKind()
+		if gvk.Group == "" && gvk.Kind == "Namespace" && f.Object.GetName() == capiutils.Namespace {
+			return true
+		}
+	}
+	return false
+}
+
+// namespaceRuntimeFile builds the guests namespace manifest, matching what
+// Generate emits.
+func namespaceRuntimeFile() (*asset.RuntimeFile, error) {
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: capiutils.Namespace},
+	}
+	namespace.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Namespace"))
+	data, err := yaml.Marshal(namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal the %s namespace: %w", capiutils.Namespace, err)
+	}
+	return &asset.RuntimeFile{
+		File:   asset.File{Filename: filepath.Join(capiutils.ManifestDir, "000_capi-namespace.yaml"), Data: data},
+		Object: namespace,
+	}, nil
 }

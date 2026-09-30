@@ -1,6 +1,8 @@
 package clusterapi
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -119,3 +121,78 @@ metadata:
 		assert.Contains(t, err.Error(), "document 2")
 	})
 }
+
+// `destroy cluster`.
+func TestDecodeErrorDoesNotEchoTheManifest(t *testing.T) {
+	const secret = "super-secret-value-that-must-not-be-logged"
+	// A document with no kind, which is what triggers the offending error.
+	manifest := []byte("apiVersion: v1\nmetadata:\n  name: test\nstringData:\n  token: " + secret + "\n")
+
+	_, err := ObjectsFromManifest("artifacts/object.yaml", manifest)
+	if err == nil {
+		t.Fatal("expected an error for a document with no kind")
+	}
+
+	msg := err.Error()
+	if strings.Contains(msg, secret) {
+		t.Errorf("the decode error echoed the manifest contents:\n%s", msg)
+	}
+	if len(msg) > 300 {
+		t.Errorf("the decode error is %d characters, which is long enough to be carrying the document:\n%s",
+			len(msg), msg)
+	}
+	// The location must survive, or the message is useless.
+	if !strings.Contains(msg, "artifacts/object.yaml") {
+		t.Errorf("the decode error does not name the file it came from: %s", msg)
+	}
+	if !strings.Contains(msg, "Kind") {
+		t.Errorf("the decode error does not say what was wrong: %s", msg)
+	}
+}
+
+// TestRedactDecodeErrorKeepsDiagnosticDetail checks the redaction is a scalpel:
+// a YAML syntax error carries a line number and no content, and must survive
+// intact.
+func TestRedactDecodeErrorKeepsDiagnosticDetail(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "missing kind loses only the document",
+			in:   "Object 'Kind' is missing in '{\"stringData\":{\"token\":\"secret\"}}'",
+			want: "Object 'Kind' is missing",
+		},
+		{
+			name: "missing apiVersion loses only the document",
+			in:   "Object 'apiVersion' is missing in '{\"kind\":\"Secret\"}'",
+			want: "Object 'apiVersion' is missing",
+		},
+		{
+			name: "a syntax error is passed through with its line number",
+			in:   "error converting YAML to JSON: yaml: line 5: did not find expected key",
+			want: "error converting YAML to JSON: yaml: line 5: did not find expected key",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := redactDecodeError(errors.New(tc.in)); got != tc.want {
+				t.Errorf("redactDecodeError() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	long := redactDecodeError(errors.New(strings.Repeat("x", 5000)))
+	if len(long) > maxDecodeErrorLength+len("... (truncated)") {
+		t.Errorf("an unanticipated error shape was not bounded: %d characters", len(long))
+	}
+}
+
+// TestObjectsFromManifestSkipsCommentOnlyDocuments covers the shape every one
+// of these files actually has: a comment block above the first `---`.
+//
+// A comment block is not empty as bytes, so the blank-document guard does not
+// catch it, and it resolves to no kind, so the unresolved-kind fallback used
+// to accept it as an object. Provision then failed at cl.Create with
+// "unstructured object has no kind" -- after the local control plane was up
+// and after the earlier manifests in the same file had already been created.

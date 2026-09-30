@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -85,7 +86,9 @@ func objectFromDocument(filename string, index int, doc []byte) (client.Object, 
 
 	u := &unstructured.Unstructured{}
 	if err := yaml.Unmarshal(doc, u); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal %s: %w", where, err)
+		// %s, not %w: nothing downstream may unwrap this back to the
+		// original error and print the payload it carries.
+		return nil, fmt.Errorf("failed to unmarshal %s: %s", where, redactDecodeError(err))
 	}
 
 	// A document with no kind is already rejected by the unmarshal above:
@@ -106,4 +109,34 @@ func objectFromDocument(filename string, index int, doc []byte) (client.Object, 
 		return nil, fmt.Errorf("%s declares kind %s, which is not a Kubernetes object", where, gvk)
 	}
 	return co, nil
+}
+
+// maxDecodeErrorLength bounds a decode error even after the known content-
+// bearing forms have been trimmed, so an error shape not anticipated here
+// still cannot spill a manifest into the log.
+const maxDecodeErrorLength = 200
+
+// redactDecodeError renders a decode failure without the document that caused
+// it.
+//
+// k8s.io/apimachinery/pkg/runtime/error.go:90 and :112 format a missing kind
+// or apiVersion as "Object 'Kind' is missing in '<the entire document>'". For
+// an integrated provider that is merely noisy. For platform: external it is a
+// disclosure: the manifests are the partner's own, this installer cannot know
+// what they contain, and the message lands in the installer log and from there
+// in a support bundle. A 27,000-character error carrying a whole AWSCluster was
+// how this was found.
+//
+// The location of the fault is preserved -- the caller has already added the
+// file and document number, and a YAML syntax error keeps its line number,
+// which is what someone actually needs to fix it.
+func redactDecodeError(err error) string {
+	msg := err.Error()
+	if i := strings.Index(msg, " in '"); i >= 0 {
+		msg = msg[:i]
+	}
+	if len(msg) > maxDecodeErrorLength {
+		msg = msg[:maxDecodeErrorLength] + "... (truncated)"
+	}
+	return msg
 }

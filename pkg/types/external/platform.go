@@ -87,4 +87,55 @@ type ClusterAPIProvider struct {
 	// provider requires and the installer does not know about.
 	// +optional
 	Args []string `json:"args,omitempty"`
+
+	// Hooks names programs the installer runs at fixed points in the install.
+	// +optional
+	Hooks *Hooks `json:"hooks,omitempty"`
+}
+
+// Hooks names programs the installer runs at points in the flow where an
+// integrated platform would run its own code.
+//
+// This is the seam that lets a partner automate the parts of provisioning
+// that Cluster API does not cover, without the installer gaining any
+// knowledge of their cloud. The motivating case is DNS. An integrated
+// platform creates the cluster's `api` and `api-int` records itself once the
+// load balancers exist -- for AWS that is InfraReady in
+// pkg/infrastructure/aws/clusterapi/aws.go:112 -- but Cluster API has no
+// contract for it: the core Cluster carries a single
+// spec.controlPlaneEndpoint and there is no field for an internal endpoint at
+// all. Without `api-int` the bootstrap node fails at its resolve-api-int-url
+// stage and no control-plane machine can fetch its ignition, so something has
+// to create those records, and on this platform it cannot be the installer.
+//
+// Each field is a path to an executable, relative to the External manifest
+// directory in the install directory. It must stay inside that directory: the
+// install directory is the unit a user copies, archives and hands to someone
+// else, and a hook reaching outside it would run something that did not
+// travel with it.
+//
+// Every hook is optional. Leaving one unset is a supported configuration --
+// the records may be created out of band, which is what the existing
+// non-Cluster-API External CI does with CloudFormation -- so an absent hook
+// is a warning naming the consequence, never an error.
+type Hooks struct {
+	// InfraReady names a program run once the Cluster reports
+	// status.infrastructureReady, after the provider has created the network
+	// and load balancers and before any machine is created. It is the point
+	// at which the load balancer addresses first exist and the last point at
+	// which DNS can be created in time for the bootstrap node to use it.
+	// +optional
+	InfraReady string `json:"infraReady,omitempty"`
+
+	// PreDestroy names a program run by `destroy cluster` after the local
+	// control plane has been restored and before the Cluster is deleted.
+	//
+	// It is the counterpart of InfraReady and exists because that hook's
+	// resources are invisible to Cluster API: deleting the Cluster removes
+	// what the provider built and nothing else. Running before the delete
+	// rather than after is deliberate -- a DNS alias record is described in
+	// terms of the load balancer it points at, so it is cheaper to remove
+	// while that load balancer still exists.
+	// +optional
+	PreDestroy string `json:"preDestroy,omitempty"`
 }

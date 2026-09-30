@@ -18,6 +18,14 @@ type Metadata struct {
 	// install that provisioned nothing.
 	// +optional
 	ClusterAPI *ClusterAPIMetadata `json:"clusterAPI,omitempty"`
+
+	// BaseDomain is the cluster's base domain, recorded because the teardown
+	// hook is handed the same cluster identity the provisioning hook was and
+	// the install-config that carried it has been consumed by the time
+	// `destroy cluster` runs. It is not a credential and is already present
+	// throughout the cluster's DNS.
+	// +optional
+	BaseDomain string `json:"baseDomain,omitempty"`
 }
 
 // ClusterAPIMetadata records where the user-supplied Cluster API
@@ -60,4 +68,15 @@ type ClusterAPIMetadata struct {
 	// same way the install did.
 	// +optional
 	Args []string `json:"args,omitempty"`
+
+	// Hooks are the programs the install was configured to run, repeated here
+	// for the same reason as Args: `destroy cluster` has to run the teardown
+	// counterpart of whatever provisioning hook created resources, and the
+	// install-config that named it is gone by then.
+	//
+	// The paths are relative to the External manifest directory in the
+	// install directory, so unlike the provider artifact paths above they
+	// travel with the install directory rather than being machine-local.
+	// +optional
+	Hooks *Hooks `json:"hooks,omitempty"`
 }

@@ -102,3 +102,71 @@ func TestValidatePlatform(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateHooks covers the one property that can be decided from the
+// install-config alone: a hook path stays inside the install directory.
+//
+// Existence and executability are deliberately not checked here. They need
+// the filesystem, which this package does not have, and they are enforced
+// where the hook is about to run -- one implementation rather than two that
+// can disagree about what is valid.
+func TestValidateHooks(t *testing.T) {
+	provider := func(h *external.Hooks) *external.Platform {
+		return &external.Platform{ClusterAPI: &external.ClusterAPIProvider{
+			Name:           "reference",
+			BinaryPath:     "/tmp/provider",
+			ComponentsPath: "/tmp/components.yaml",
+			Hooks:          h,
+		}}
+	}
+
+	cases := []struct {
+		name     string
+		hooks    *external.Hooks
+		expected []string
+	}{{
+		name:  "no hooks at all is valid",
+		hooks: nil,
+	}, {
+		// Configuring neither half is supported: DNS may be created out of
+		// band, which is what the non-Cluster-API External CI does.
+		name:  "an empty hooks block is valid",
+		hooks: &external.Hooks{},
+	}, {
+		name:  "relative paths in a subdirectory",
+		hooks: &external.Hooks{InfraReady: "hooks/infra-hook.sh", PreDestroy: "hooks/infra-hook.sh"},
+	}, {
+		name:  "a bare filename",
+		hooks: &external.Hooks{InfraReady: "infra-hook.sh"},
+	}, {
+		name:  "absolute paths escape the install directory",
+		hooks: &external.Hooks{InfraReady: "/usr/local/bin/dns.sh"},
+		expected: []string{
+			`^test-path\.clusterAPI\.hooks\.infraReady: Invalid value.*relative path inside`,
+		},
+	}, {
+		name:  "parent traversal escapes the install directory",
+		hooks: &external.Hooks{PreDestroy: "../../../bin/sh"},
+		expected: []string{
+			`^test-path\.clusterAPI\.hooks\.preDestroy: Invalid value.*relative path inside`,
+		},
+	}, {
+		// Reported together, like every other field in this package.
+		name:  "both halves are reported at once",
+		hooks: &external.Hooks{InfraReady: "/abs/one.sh", PreDestroy: "../two.sh"},
+		expected: []string{
+			`^test-path\.clusterAPI\.hooks\.infraReady: Invalid value`,
+			`^test-path\.clusterAPI\.hooks\.preDestroy: Invalid value`,
+		},
+	}}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := ValidatePlatform(provider(tc.hooks), field.NewPath("test-path"))
+			assert.Len(t, errs, len(tc.expected))
+			for i, want := range tc.expected {
+				assert.Regexp(t, want, errs[i].Error())
+			}
+		})
+	}
+}

@@ -26,3 +26,15 @@ const ManifestDir string = "external-install"
 // objects. They are separated because the installer creates them in a second
 // stage, after the infrastructure reports ready.
 const MachineManifestDir string = "machines"
+
+// HookStateDir is the subdirectory of ManifestDir a provisioning hook may use
+// to record what it created, so that the teardown hook can remove exactly
+// that.
+//
+// It exists because a hook creates resources outside Cluster API's ownership,
+// and nothing else will ever clean those up: deleting the Cluster deletes what
+// the provider built, and a DNS zone the hook created is not that. The
+// installer does not read or interpret anything here -- it only guarantees the
+// directory exists, is writable, and survives from `create cluster` to
+// `destroy cluster` in the same install directory.
+const HookStateDir string = "hook-state"

@@ -4,11 +4,13 @@ package external
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -21,6 +23,7 @@ import (
 	"github.com/openshift/installer/cmd/openshift-install/command"
 	"github.com/openshift/installer/pkg/clusterapi"
 	"github.com/openshift/installer/pkg/destroy/providers"
+	"github.com/openshift/installer/pkg/infrastructure/external/hooks"
 	"github.com/openshift/installer/pkg/types"
 )
 
@@ -103,6 +106,19 @@ func (u *ClusterUninstaller) Run() (*types.ClusterQuota, error) {
 		return nil, err
 	}
 
+	// Before the delete, not after. Whatever the provisioning hook created is
+	// invisible to Cluster API -- that is why it needed a hook -- so nothing
+	// in the delete below will remove it. Running first also means those
+	// resources can still be described in terms of the infrastructure they
+	// refer to: a DNS alias record names the load balancer it points at, and
+	// that load balancer is about to stop existing.
+	//
+	// A failure here aborts before anything is deleted, which leaves the
+	// cluster whole and the destroy re-runnable.
+	if err := u.runPreDestroyHook(ctx, restored, clusters); err != nil {
+		return nil, err
+	}
+
 	for _, cluster := range clusters {
 		if err := u.deleteCluster(ctx, cl, cluster); err != nil {
 			return nil, err
@@ -115,6 +131,68 @@ func (u *ClusterUninstaller) Run() (*types.ClusterQuota, error) {
 		"so this is not a statement that nothing remains in the account.")
 
 	return &types.ClusterQuota{}, nil
+}
+
+// runPreDestroyHook runs the teardown counterpart of the install's
+// infra-ready hook.
+//
+// It is a no-op unless the install recorded one. That is the ordinary case:
+// an install that created no out-of-band resources has none to remove, and an
+// install from before hooks existed has no record of them either.
+//
+// The hook is given the same view of the cluster the provisioning hook had --
+// the Cluster and the provider's infrastructure object, read back out of the
+// restored control plane -- so that a single script can serve both directions
+// without the two halves diverging over what they are told.
+func (u *ClusterUninstaller) runPreDestroyHook(ctx context.Context, restored, clusters []client.Object) error {
+	meta := u.Metadata.ClusterPlatformMetadata.External
+	if meta == nil || meta.ClusterAPI == nil || meta.ClusterAPI.Hooks == nil || meta.ClusterAPI.Hooks.PreDestroy == "" {
+		u.Logger.Debug("No pre-destroy hook recorded for this cluster")
+		return nil
+	}
+
+	req := hooks.Request{
+		Kind:        hooks.PreDestroy,
+		Program:     meta.ClusterAPI.Hooks.PreDestroy,
+		InstallDir:  u.Dir,
+		InfraID:     u.Metadata.InfraID,
+		ClusterName: u.Metadata.ClusterName,
+		BaseDomain:  meta.BaseDomain,
+	}
+
+	if len(clusters) == 1 {
+		if cluster, ok := clusters[0].(*clusterv1.Cluster); ok {
+			req.ControlPlaneEndpointHost = cluster.Spec.ControlPlaneEndpoint.Host
+			req.ControlPlaneEndpointPort = strconv.Itoa(int(cluster.Spec.ControlPlaneEndpoint.Port))
+			if data, err := json.Marshal(cluster); err == nil {
+				req.ClusterJSON = data
+			}
+			if infra := matchInfrastructure(restored, cluster); infra != nil {
+				if data, err := json.Marshal(infra); err == nil {
+					req.InfraJSON = data
+				}
+			}
+		}
+	}
+
+	return hooks.Run(ctx, req)
+}
+
+// matchInfrastructure finds the object a Cluster's infrastructureRef points
+// at, among the objects just restored. Matching on name and kind rather than
+// on uid because the uids are new -- these objects were recreated a moment
+// ago in a control plane that did not exist when the reference was written.
+func matchInfrastructure(restored []client.Object, cluster *clusterv1.Cluster) client.Object {
+	ref := cluster.Spec.InfrastructureRef
+	if ref == nil {
+		return nil
+	}
+	for _, obj := range restored {
+		if obj.GetName() == ref.Name && kindOf(obj) == ref.Kind {
+			return obj
+		}
+	}
+	return nil
 }
 
 // restore recreates, paused, the objects the install applied, and returns

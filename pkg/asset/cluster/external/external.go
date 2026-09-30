@@ -16,6 +16,7 @@ import (
 func Metadata(config *types.InstallConfig) *external.Metadata {
 	metadata := &external.Metadata{
 		PlatformName: config.Platform.External.PlatformName,
+		BaseDomain:   config.BaseDomain,
 	}
 
 	if capi := config.Platform.External.ClusterAPI; capi != nil {
@@ -24,6 +25,12 @@ func Metadata(config *types.InstallConfig) *external.Metadata {
 			BinaryPath:     capi.BinaryPath,
 			ComponentsPath: capi.ComponentsPath,
 			Args:           append([]string(nil), capi.Args...),
+		}
+		// Copied rather than shared: metadata is marshalled well after this
+		// returns, and the install-config is not this function's to alias.
+		if capi.Hooks != nil {
+			hooks := *capi.Hooks
+			metadata.ClusterAPI.Hooks = &hooks
 		}
 	}
 

@@ -37,15 +37,21 @@ import (
 // Provider implements the External platform's Cluster API infrastructure
 // provider.
 //
-// It implements PreProvider and nothing else. The remaining hooks are optional
-// interfaces reached by type assertion, so the ones it does not implement are
-// simply not called. In particular there is no InfraReady hook yet: delivering
-// a cloud controller manager and its configuration to the cluster being
-// installed is the next increment, and is not part of this one.
+// The remaining installer hooks are optional interfaces reached by type
+// assertion, so the ones it does not implement are simply not called.
+//
+// InfraReady is implemented, but note what it does and does not do. It runs a
+// program the user supplies rather than doing any cloud work itself -- see
+// infraready.go -- because the thing that has to happen there, creating the
+// cluster's DNS, is not expressible in the Cluster API contract and cannot be
+// done by an installer that has no knowledge of the provider's cloud.
+// Delivering a cloud controller manager and its configuration to the cluster
+// being installed is still a later increment.
 type Provider struct{}
 
 var (
 	_ infracapi.PreProvider                   = Provider{}
+	_ infracapi.InfraReadyProvider            = Provider{}
 	_ infracapi.ManifestProvider              = Provider{}
 	_ infracapi.ManifestValidator             = Provider{}
 	_ infracapi.UnstructuredManifestTolerator = Provider{}

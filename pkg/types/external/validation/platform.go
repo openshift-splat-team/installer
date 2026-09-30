@@ -52,13 +52,18 @@ func validateClusterAPI(p *external.ClusterAPIProvider, fldPath *field.Path) fie
 	return allErrs
 }
 
-// validateHooks checks the shape of the hook paths.
+// validateHooks checks the shape of each configured hook.
 //
 // Only containment is decided here, not existence or executability: those
 // need the install directory, which this package does not have, and they are
 // checked where the hook is about to run. Containment can be decided from the
 // string alone, and has to be, because it is the property that makes the
 // install directory a self-contained unit.
+//
+// Args are deliberately not validated at all. They are the partner's
+// contract with their own program, and the installer does not know what a
+// valid one looks like -- inventing a rule here would reject a working
+// configuration for a program this code has never seen.
 func validateHooks(h *external.Hooks, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if h == nil {
@@ -66,30 +71,39 @@ func validateHooks(h *external.Hooks, fldPath *field.Path) field.ErrorList {
 	}
 	for _, hook := range []struct {
 		name string
-		path string
+		hook *external.Hook
 	}{
 		{"infraReady", h.InfraReady},
+		{"postProvision", h.PostProvision},
 		{"preDestroy", h.PreDestroy},
 	} {
-		allErrs = append(allErrs, validateHookPath(hook.path, fldPath.Child(hook.name))...)
+		allErrs = append(allErrs, validateHook(hook.hook, fldPath.Child(hook.name))...)
 	}
 	return allErrs
 }
 
-// validateHookPath requires a relative path that stays inside the External
-// manifest directory.
+// validateHook requires a program, given as a relative path that stays inside
+// the External manifest directory.
 //
-// filepath.Localize is the check rather than a hand-written scan for "..":
-// it rejects absolute paths, parent traversal and platform-specific escapes
-// in one place, and it is the same function the standard library uses to
-// decide whether a path from an untrusted source can be joined to a root.
-func validateHookPath(path string, fldPath *field.Path) field.ErrorList {
+// filepath.Localize is the containment check rather than a hand-written scan
+// for "..": it rejects absolute paths, parent traversal and platform-specific
+// escapes in one place, and it is the same function the standard library uses
+// to decide whether a path from an untrusted source can be joined to a root.
+func validateHook(h *external.Hook, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-	if path == "" {
+	if h == nil {
 		return allErrs
 	}
-	if _, err := filepath.Localize(path); err != nil {
-		allErrs = append(allErrs, field.Invalid(fldPath, path,
+	// An empty program with arguments set is the mistake worth catching: it
+	// is a hook the user believes they configured and that would silently
+	// never run.
+	if h.Program == "" {
+		allErrs = append(allErrs, field.Required(fldPath.Child("program"),
+			"path to the hook program is required when the hook is configured"))
+		return allErrs
+	}
+	if _, err := filepath.Localize(h.Program); err != nil {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("program"), h.Program,
 			fmt.Sprintf("must be a relative path inside the %q directory of the install directory, "+
 				"so that the hook travels with the install directory it belongs to", external.ManifestDir)))
 	}

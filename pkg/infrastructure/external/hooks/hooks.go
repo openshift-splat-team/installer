@@ -33,6 +33,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -51,6 +52,10 @@ const (
 	// InfraReady runs once the Cluster reports its infrastructure ready and
 	// before any machine is created.
 	InfraReady Kind = "infra-ready"
+
+	// PostProvision runs once the control-plane machines exist, before the
+	// installer waits for the bootstrap to complete.
+	PostProvision Kind = "post-provision"
 
 	// PreDestroy runs during `destroy cluster`, before the Cluster is deleted.
 	PreDestroy Kind = "pre-destroy"
@@ -72,6 +77,12 @@ type Request struct {
 	// Program is the path to the executable, relative to the External
 	// manifest directory inside InstallDir.
 	Program string
+
+	// Args is the program's argv, verbatim from the install-config. The
+	// installer does not interpret it -- see externaltypes.Hook for why the
+	// hook-specific half of the contract is arguments rather than more
+	// environment.
+	Args []string
 
 	// InstallDir is the install directory. It is the hook's working
 	// directory and the root its Program is resolved against.
@@ -176,6 +187,14 @@ func Run(ctx context.Context, req Request) error {
 		"OPENSHIFT_INSTALL_STATE_DIR="+stateDir,
 		"OPENSHIFT_INSTALL_CONTROL_PLANE_ENDPOINT_HOST="+req.ControlPlaneEndpointHost,
 		"OPENSHIFT_INSTALL_CONTROL_PLANE_ENDPOINT_PORT="+req.ControlPlaneEndpointPort,
+		// The path the installer writes the cluster's admin kubeconfig to
+		// (pkg/asset/kubeconfig/admin.go:13). It is set for every hook and is
+		// usable by none of them until the API is serving, which is a
+		// property of when the hook runs rather than of the variable: at
+		// infra-ready nothing has booted, at post-provision the control plane
+		// is up. A hook that needs it should say so when it is not usable
+		// rather than assume it is.
+		"OPENSHIFT_INSTALL_KUBECONFIG="+filepath.Join(installDir, "auth", "kubeconfig"),
 	)
 
 	for _, obj := range []struct {
@@ -204,12 +223,19 @@ func Run(ctx context.Context, req Request) error {
 	if err != nil {
 		return err
 	}
-	logrus.Infof("Running the %s hook %s (sha256:%s)", req.Kind, program, digest)
+	// The arguments are logged with the program because together they are the
+	// command a human would have to repeat to reproduce a failure, and a hook
+	// that misbehaves usually does so because of what it was told rather than
+	// because of what it is. They are the user's own strings from the
+	// install-config, which is why externaltypes.Hook.Args says not to put a
+	// credential in one.
+	logrus.Infof("Running the %s hook %s%s (sha256:%s)",
+		req.Kind, program, formatArgs(req.Args), digest)
 
 	stdout := &logWriter{prefix: string(req.Kind)}
 	stderr := &logWriter{prefix: string(req.Kind)}
 
-	cmd := exec.CommandContext(ctx, program)
+	cmd := exec.CommandContext(ctx, program, req.Args...)
 	cmd.Dir = installDir
 	cmd.Env = env
 	cmd.Stdout = stdout
@@ -219,15 +245,46 @@ func Run(ctx context.Context, req Request) error {
 	stdout.Flush()
 	stderr.Flush()
 	if runErr != nil {
+		// The hook's own last words go into the error, not just into the log
+		// above it. A hook is the only thing that knows why it failed -- the
+		// installer cannot even name the resource it was creating -- so an
+		// error reading "exited 1, see the log" throws away the only useful
+		// sentence there was. stderr is preferred and stdout is the fallback,
+		// because a program that says nothing on stderr has usually said it
+		// on stdout.
+		detail := stderr.Tail()
+		if detail == "" {
+			detail = stdout.Tail()
+		}
 		var exitErr *exec.ExitError
 		if errors.As(runErr, &exitErr) {
-			return fmt.Errorf("the %s hook %s exited %d; its output is above",
-				req.Kind, req.Program, exitErr.ExitCode())
+			if detail == "" {
+				return fmt.Errorf("the %s hook %s exited %d and produced no output",
+					req.Kind, req.Program, exitErr.ExitCode())
+			}
+			return fmt.Errorf("the %s hook %s exited %d: %s",
+				req.Kind, req.Program, exitErr.ExitCode(), detail)
 		}
 		return fmt.Errorf("failed to run the %s hook %s: %w", req.Kind, req.Program, runErr)
 	}
-	logrus.Debugf("The %s hook completed", req.Kind)
+	logrus.Infof("The %s hook %s succeeded", req.Kind, req.Program)
 	return nil
+}
+
+// formatArgs renders the argv for a log line, quoting anything that would be
+// ambiguous to read back.
+func formatArgs(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	quoted := make([]string, 0, len(args))
+	for _, a := range args {
+		if a == "" || strings.ContainsAny(a, " \t\n\"'\\") {
+			a = strconv.Quote(a)
+		}
+		quoted = append(quoted, a)
+	}
+	return " " + strings.Join(quoted, " ")
 }
 
 // resolveProgram turns the configured relative path into an absolute one,
@@ -286,12 +343,23 @@ func sha256File(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+// tailLines is how many of a hook's last output lines are kept to put in the
+// error if it fails. Enough for a stack trace or a cloud API error with its
+// request ID; not so many that a chatty hook's whole run ends up quoted
+// inside a single installer error message, where it is unreadable.
+const tailLines = 5
+
 // logWriter forwards a child process's output to the installer log one line
 // at a time, so that a hook's progress is interleaved with the installer's
 // own rather than arriving in a block when the process exits.
+//
+// It also keeps the last few lines, which is what turns a hook's failure into
+// an installer error a user can act on rather than a reference to output
+// somewhere further up the terminal.
 type logWriter struct {
 	prefix string
 	buf    bytes.Buffer
+	tail   []string
 }
 
 // Write never fails, and says so, because it is handed to exec.Cmd as the
@@ -325,5 +393,15 @@ func (w *logWriter) Flush() {
 func (w *logWriter) emit(line string) {
 	if line = strings.TrimRight(line, "\r\n"); line != "" {
 		logrus.Infof("%s: %s", w.prefix, line)
+		w.tail = append(w.tail, line)
+		if len(w.tail) > tailLines {
+			w.tail = w.tail[len(w.tail)-tailLines:]
+		}
 	}
+}
+
+// Tail is the last few lines the process wrote, joined for an error message.
+// Call it after Flush.
+func (w *logWriter) Tail() string {
+	return strings.Join(w.tail, "; ")
 }

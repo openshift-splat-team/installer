@@ -37,44 +37,66 @@ import (
 // providers use it for exactly the same purpose.
 func (p Provider) InfraReady(ctx context.Context, in infracapi.InfraReadyInput) error {
 	configured := configuredHooks(in.InstallConfig)
-	if configured == nil || configured.InfraReady == "" {
+	if configured == nil || configured.InfraReady == nil {
 		warnNoInfraReadyHook(in.InstallConfig)
 		return nil
 	}
 
-	cluster, err := coreCluster(ctx, in.Client, in.InfraID)
+	req, err := buildRequest(ctx, in.Client, hooks.InfraReady, configured.InfraReady, in.InstallConfig, in.InfraID)
 	if err != nil {
 		return err
 	}
+	return hooks.Run(ctx, req)
+}
+
+// buildRequest assembles everything a hook is told about the cluster.
+//
+// It is shared by every hook point rather than written per hook, because the
+// value of the contract is that it does not change between them: one program
+// dispatching on OPENSHIFT_INSTALL_HOOK sees the same cluster described the
+// same way each time it is called, and its create and delete halves can be
+// read against each other. Only Kind and the program differ.
+func buildRequest(
+	ctx context.Context,
+	cl client.Client,
+	kind hooks.Kind,
+	hook *externaltypes.Hook,
+	ic *installconfig.InstallConfig,
+	infraID string,
+) (hooks.Request, error) {
+	cluster, err := coreCluster(ctx, cl, infraID)
+	if err != nil {
+		return hooks.Request{}, err
+	}
 
 	req := hooks.Request{
-		Kind:                     hooks.InfraReady,
-		Program:                  configured.InfraReady,
+		Kind:                     kind,
+		Program:                  hook.Program,
+		Args:                     hook.Args,
 		InstallDir:               command.RootOpts.Dir,
-		InfraID:                  in.InfraID,
-		ClusterName:              in.InstallConfig.Config.ObjectMeta.Name,
-		BaseDomain:               in.InstallConfig.Config.BaseDomain,
-		Publish:                  string(in.InstallConfig.Config.Publish),
+		InfraID:                  infraID,
+		ClusterName:              ic.Config.ObjectMeta.Name,
+		BaseDomain:               ic.Config.BaseDomain,
+		Publish:                  string(ic.Config.Publish),
 		ControlPlaneEndpointHost: cluster.Spec.ControlPlaneEndpoint.Host,
 		ControlPlaneEndpointPort: strconv.Itoa(int(cluster.Spec.ControlPlaneEndpoint.Port)),
 	}
 
 	if req.ClusterJSON, err = json.Marshal(cluster); err != nil {
-		return fmt.Errorf("failed to serialise the Cluster for the hook: %w", err)
+		return hooks.Request{}, fmt.Errorf("failed to serialise the Cluster for the hook: %w", err)
 	}
 	// The provider's own object is best-effort. A hook that needs it will
 	// fail on its own and say why, in its own terms; failing here would mean
 	// the installer deciding that an object it cannot interpret is required.
-	if infra, err := infrastructureObject(ctx, in.Client, cluster); err != nil {
+	if infra, err := infrastructureObject(ctx, cl, cluster); err != nil {
 		logrus.Warnf("Could not read the infrastructure object to pass to the hook, so only the "+
 			"cluster identity and the control plane endpoint will be available to it: %v", err)
 	} else if infra != nil {
 		if req.InfraJSON, err = infra.MarshalJSON(); err != nil {
-			return fmt.Errorf("failed to serialise the infrastructure object for the hook: %w", err)
+			return hooks.Request{}, fmt.Errorf("failed to serialise the infrastructure object for the hook: %w", err)
 		}
 	}
-
-	return hooks.Run(ctx, req)
+	return req, nil
 }
 
 // configuredHooks returns the hooks the install-config names, or nil.

@@ -28,10 +28,9 @@ func Metadata(config *types.InstallConfig) *external.Metadata {
 		}
 		// Copied rather than shared: metadata is marshalled well after this
 		// returns, and the install-config is not this function's to alias.
-		if capi.Hooks != nil {
-			hooks := *capi.Hooks
-			metadata.ClusterAPI.Hooks = &hooks
-		}
+		// Deeply, because each hook is itself a pointer to a struct holding a
+		// slice, and a shallow copy would alias both.
+		metadata.ClusterAPI.Hooks = capi.Hooks.DeepCopy()
 	}
 
 	return metadata

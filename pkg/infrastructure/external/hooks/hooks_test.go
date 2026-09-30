@@ -202,6 +202,28 @@ func TestStateDirSurvivesBetweenHooks(t *testing.T) {
 	assert.Equal(t, "zone-123\n", string(got))
 }
 
+// TestRunPassesArgsVerbatim is the flag half of the contract: the installer
+// hands the program its argv unchanged, which is what lets a hook be a
+// compiled binary as readily as a script and lets a failed hook be rerun by
+// hand from the command line in the installer's log.
+func TestRunPassesArgsVerbatim(t *testing.T) {
+	skipWithoutShell(t)
+
+	dir := writeHook(t, "hooks/args.sh",
+		"#!/bin/sh\nfor a in \"$@\"; do echo \"[$a]\" >>\"${OPENSHIFT_INSTALL_STATE_DIR}/argv\"; done\n", 0o755)
+
+	// A value with a space in it is the case worth pinning: it survives only
+	// if the installer never puts the argv through a shell.
+	args := []string{"--input-service=openshift-ingress/router-external-default", "--input-dns-zone", "Z 1"}
+	require.NoError(t, Run(context.Background(), Request{
+		Kind: PostProvision, Program: "hooks/args.sh", Args: args, InstallDir: dir,
+	}))
+
+	got, err := os.ReadFile(filepath.Join(dir, externaltypes.ManifestDir, externaltypes.HookStateDir, "argv"))
+	require.NoError(t, err)
+	assert.Equal(t, "[--input-service=openshift-ingress/router-external-default]\n[--input-dns-zone]\n[Z 1]\n", string(got))
+}
+
 // TestRunRejects covers every way a hook can be unusable. Each of these is a
 // failure the user can fix, so each error has to name the thing to fix.
 func TestRunRejects(t *testing.T) {
@@ -212,6 +234,16 @@ func TestRunRejects(t *testing.T) {
 		err := Run(context.Background(), Request{Kind: InfraReady, Program: "hooks/fail.sh", InstallDir: dir})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "exited 3")
+		// The hook's own last words, not a pointer to the log. A hook is the
+		// only thing that knows why it failed.
+		assert.Contains(t, err.Error(), "breaking")
+	})
+
+	t.Run("a hook that says nothing says so", func(t *testing.T) {
+		dir := writeHook(t, "hooks/quiet.sh", "#!/bin/sh\nexit 1\n", 0o755)
+		err := Run(context.Background(), Request{Kind: InfraReady, Program: "hooks/quiet.sh", InstallDir: dir})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "produced no output")
 	})
 
 	t.Run("missing program", func(t *testing.T) {

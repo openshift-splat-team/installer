@@ -146,14 +146,16 @@ func (u *ClusterUninstaller) Run() (*types.ClusterQuota, error) {
 // without the two halves diverging over what they are told.
 func (u *ClusterUninstaller) runPreDestroyHook(ctx context.Context, restored, clusters []client.Object) error {
 	meta := u.Metadata.ClusterPlatformMetadata.External
-	if meta == nil || meta.ClusterAPI == nil || meta.ClusterAPI.Hooks == nil || meta.ClusterAPI.Hooks.PreDestroy == "" {
+	if meta == nil || meta.ClusterAPI == nil || meta.ClusterAPI.Hooks == nil || meta.ClusterAPI.Hooks.PreDestroy == nil {
 		u.Logger.Debug("No pre-destroy hook recorded for this cluster")
 		return nil
 	}
+	hook := meta.ClusterAPI.Hooks.PreDestroy
 
 	req := hooks.Request{
 		Kind:        hooks.PreDestroy,
-		Program:     meta.ClusterAPI.Hooks.PreDestroy,
+		Program:     hook.Program,
+		Args:        hook.Args,
 		InstallDir:  u.Dir,
 		InfraID:     u.Metadata.InfraID,
 		ClusterName: u.Metadata.ClusterName,

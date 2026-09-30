@@ -40,18 +40,21 @@ import (
 // The remaining installer hooks are optional interfaces reached by type
 // assertion, so the ones it does not implement are simply not called.
 //
-// InfraReady is implemented, but note what it does and does not do. It runs a
-// program the user supplies rather than doing any cloud work itself -- see
-// infraready.go -- because the thing that has to happen there, creating the
-// cluster's DNS, is not expressible in the Cluster API contract and cannot be
-// done by an installer that has no knowledge of the provider's cloud.
-// Delivering a cloud controller manager and its configuration to the cluster
-// being installed is still a later increment.
+// InfraReady and PostProvision are implemented, but note what they do and do
+// not do. Each runs a program the user supplies rather than doing any cloud
+// work itself -- see infraready.go and postprovision.go -- because the things
+// that have to happen there, creating the cluster's API and ingress DNS, are
+// not expressible in the Cluster API contract and cannot be done by an
+// installer that has no knowledge of the provider's cloud. The two differ
+// only in when they run, and that difference is the whole reason there are
+// two: InfraReady can name what the provider built, PostProvision can name
+// what the cluster built for itself.
 type Provider struct{}
 
 var (
 	_ infracapi.PreProvider                   = Provider{}
 	_ infracapi.InfraReadyProvider            = Provider{}
+	_ infracapi.PostProvider                  = Provider{}
 	_ infracapi.ManifestProvider              = Provider{}
 	_ infracapi.ManifestValidator             = Provider{}
 	_ infracapi.UnstructuredManifestTolerator = Provider{}

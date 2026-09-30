@@ -46,8 +46,12 @@ func TestMetadataRecordsWhatDestroyNeeds(t *testing.T) {
 			ComponentsPath: "/opt/provider/components.yaml",
 			Args:           []string{"--feature-gates=Something=true"},
 			Hooks: &external.Hooks{
-				InfraReady: "hooks/infra-hook.sh",
-				PreDestroy: "hooks/infra-hook.sh",
+				InfraReady: &external.Hook{Program: "hooks/infra-hook.sh"},
+				PostProvision: &external.Hook{
+					Program: "hooks/infra-hook.sh",
+					Args:    []string{"--input-dns-zone=Z1"},
+				},
+				PreDestroy: &external.Hook{Program: "hooks/infra-hook.sh"},
 			},
 		},
 	}))
@@ -62,7 +66,15 @@ func TestMetadataRecordsWhatDestroyNeeds(t *testing.T) {
 	// a DNS zone, by construction outside Cluster API's ownership -- leaks
 	// with nothing left in the install directory to identify it.
 	require.NotNil(t, got.ClusterAPI.Hooks)
-	assert.Equal(t, "hooks/infra-hook.sh", got.ClusterAPI.Hooks.PreDestroy)
+	require.NotNil(t, got.ClusterAPI.Hooks.PreDestroy)
+	assert.Equal(t, "hooks/infra-hook.sh", got.ClusterAPI.Hooks.PreDestroy.Program)
+
+	// The arguments travel with the program. A teardown hook told nothing of
+	// what its provisioning half was told cannot find the same resources:
+	// the hosted zone the wildcard record was created in is an argument, not
+	// something destroy can rediscover.
+	require.NotNil(t, got.ClusterAPI.Hooks.PostProvision)
+	assert.Equal(t, []string{"--input-dns-zone=Z1"}, got.ClusterAPI.Hooks.PostProvision.Args)
 
 	// The teardown hook is handed the same cluster identity the provisioning
 	// hook was, and the base domain is the half of it that is not already in
@@ -75,7 +87,10 @@ func TestMetadataRecordsWhatDestroyNeeds(t *testing.T) {
 // long after the function returns, so sharing the install-config's memory
 // means a later edit to either shows up in the other.
 func TestMetadataDoesNotAliasTheInstallConfig(t *testing.T) {
-	hooks := &external.Hooks{InfraReady: "hooks/a.sh", PreDestroy: "hooks/a.sh"}
+	hooks := &external.Hooks{
+		InfraReady: &external.Hook{Program: "hooks/a.sh"},
+		PreDestroy: &external.Hook{Program: "hooks/a.sh", Args: []string{"--zone=Z1"}},
+	}
 	args := []string{"--one"}
 	platform := &external.Platform{
 		ClusterAPI: &external.ClusterAPIProvider{Args: args, Hooks: hooks},
@@ -83,10 +98,12 @@ func TestMetadataDoesNotAliasTheInstallConfig(t *testing.T) {
 
 	got := Metadata(config(platform))
 
-	hooks.PreDestroy = "hooks/changed.sh"
+	hooks.PreDestroy.Program = "hooks/changed.sh"
+	hooks.PreDestroy.Args[0] = "--zone=changed"
 	args[0] = "--changed"
 
-	assert.Equal(t, "hooks/a.sh", got.ClusterAPI.Hooks.PreDestroy)
+	assert.Equal(t, "hooks/a.sh", got.ClusterAPI.Hooks.PreDestroy.Program)
+	assert.Equal(t, []string{"--zone=Z1"}, got.ClusterAPI.Hooks.PreDestroy.Args)
 	assert.Equal(t, []string{"--one"}, got.ClusterAPI.Args)
 }
 

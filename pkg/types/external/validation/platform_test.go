@@ -134,29 +134,29 @@ func TestValidateHooks(t *testing.T) {
 		hooks: &external.Hooks{},
 	}, {
 		name:  "relative paths in a subdirectory",
-		hooks: &external.Hooks{InfraReady: "hooks/infra-hook.sh", PreDestroy: "hooks/infra-hook.sh"},
+		hooks: &external.Hooks{InfraReady: &external.Hook{Program: "hooks/infra-hook.sh"}, PreDestroy: &external.Hook{Program: "hooks/infra-hook.sh"}},
 	}, {
 		name:  "a bare filename",
-		hooks: &external.Hooks{InfraReady: "infra-hook.sh"},
+		hooks: &external.Hooks{InfraReady: &external.Hook{Program: "infra-hook.sh"}},
 	}, {
 		name:  "absolute paths escape the install directory",
-		hooks: &external.Hooks{InfraReady: "/usr/local/bin/dns.sh"},
+		hooks: &external.Hooks{InfraReady: &external.Hook{Program: "/usr/local/bin/dns.sh"}},
 		expected: []string{
-			`^test-path\.clusterAPI\.hooks\.infraReady: Invalid value.*relative path inside`,
+			`^test-path\.clusterAPI\.hooks\.infraReady\.program: Invalid value.*relative path inside`,
 		},
 	}, {
 		name:  "parent traversal escapes the install directory",
-		hooks: &external.Hooks{PreDestroy: "../../../bin/sh"},
+		hooks: &external.Hooks{PreDestroy: &external.Hook{Program: "../../../bin/sh"}},
 		expected: []string{
-			`^test-path\.clusterAPI\.hooks\.preDestroy: Invalid value.*relative path inside`,
+			`^test-path\.clusterAPI\.hooks\.preDestroy\.program: Invalid value.*relative path inside`,
 		},
 	}, {
 		// Reported together, like every other field in this package.
 		name:  "both halves are reported at once",
-		hooks: &external.Hooks{InfraReady: "/abs/one.sh", PreDestroy: "../two.sh"},
+		hooks: &external.Hooks{InfraReady: &external.Hook{Program: "/abs/one.sh"}, PreDestroy: &external.Hook{Program: "../two.sh"}},
 		expected: []string{
-			`^test-path\.clusterAPI\.hooks\.infraReady: Invalid value`,
-			`^test-path\.clusterAPI\.hooks\.preDestroy: Invalid value`,
+			`^test-path\.clusterAPI\.hooks\.infraReady\.program: Invalid value`,
+			`^test-path\.clusterAPI\.hooks\.preDestroy\.program: Invalid value`,
 		},
 	}}
 

@@ -59,6 +59,10 @@ func ObjectsFromManifest(filename string, data []byte) ([]DecodedManifest, error
 		if err != nil {
 			return nil, err
 		}
+		if obj == nil {
+			// The document declared nothing -- comments only.
+			continue
+		}
 		out = append(out, DecodedManifest{Object: obj, Data: doc})
 	}
 
@@ -86,14 +90,32 @@ func objectFromDocument(filename string, index int, doc []byte) (client.Object, 
 
 	u := &unstructured.Unstructured{}
 	if err := yaml.Unmarshal(doc, u); err != nil {
-		// %s, not %w: nothing downstream may unwrap this back to the
-		// original error and print the payload it carries.
 		return nil, fmt.Errorf("failed to unmarshal %s: %s", where, redactDecodeError(err))
 	}
 
-	// A document with no kind is already rejected by the unmarshal above:
-	// unstructured.Unstructured requires it.
+	// A document holding only comments is not empty as bytes, but it declares
+	// nothing. The caller skips it, the same as a blank document, because a
+	// file that opens with a comment block above its first `---` is the
+	// ordinary way to write one of these and not an attempt to declare an
+	// object.
+	if len(u.Object) == 0 {
+		return nil, nil
+	}
+
+	// A document that declares content but no kind is rejected by the
+	// unmarshal above -- unstructured.Unstructured requires a kind once there
+	// is an object at all. It does not require apiVersion, so that case is
+	// caught here. Both checks exist to keep the fallback below reachable
+	// only by a document that named a kind this installer does not know,
+	// never by one that named nothing: an object with an incomplete
+	// GroupVersionKind cannot be resolved by the RESTMapper either, and
+	// failing at cl.Create means failing after the local control plane is up
+	// and after earlier manifests in the same file have been created.
 	gvk := u.GroupVersionKind()
+	if gvk.Version == "" {
+		return nil, fmt.Errorf("%s declares kind %s but no apiVersion", where, gvk.Kind)
+	}
+
 	obj, err := Scheme.New(gvk)
 	if err != nil {
 		logrus.Debugf("Manifest %s declares kind %s, which this installer has no type for; "+

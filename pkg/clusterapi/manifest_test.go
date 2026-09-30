@@ -122,6 +122,11 @@ metadata:
 	})
 }
 
+// TestDecodeErrorDoesNotEchoTheManifest holds a security property, not a
+// cosmetic one. A manifest for platform: external is the partner's own and may
+// carry credentials, and apimachinery formats a missing kind by embedding the
+// whole document in the error -- which then reaches the installer log and the
+// support bundle. This was found as a 27,000-character fatal line from
 // `destroy cluster`.
 func TestDecodeErrorDoesNotEchoTheManifest(t *testing.T) {
 	const secret = "super-secret-value-that-must-not-be-logged"
@@ -196,3 +201,55 @@ func TestRedactDecodeErrorKeepsDiagnosticDetail(t *testing.T) {
 // to accept it as an object. Provision then failed at cl.Create with
 // "unstructured object has no kind" -- after the local control plane was up
 // and after the earlier manifests in the same file had already been created.
+func TestObjectsFromManifestSkipsCommentOnlyDocuments(t *testing.T) {
+	manifest := []byte(`# Cluster API manifests for a platform: external install.
+#
+# This block is a document as far as the YAML reader is concerned.
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: test-cluster
+  namespace: openshift-cluster-api-guests
+---
+
+---
+# trailing comment, also its own document
+`)
+
+	objects, err := ObjectsFromManifest("cluster.yaml", manifest)
+	require.NoError(t, err)
+	require.Len(t, objects, 1, "only the document that declares an object may be returned")
+
+	cluster, ok := objects[0].Object.(*clusterv1.Cluster)
+	require.True(t, ok, "expected a typed Cluster, got %T", objects[0].Object)
+	assert.Equal(t, "test-cluster", cluster.GetName())
+}
+
+// TestObjectsFromManifestRejectsDocumentWithoutKind checks the other half of
+// the same fix: a document that declares content but no kind is a mistake, and
+// must stop the install at load rather than at create. The rejection comes
+// from the unstructured decoder, which is exactly why the unresolved-kind
+// fallback cannot be reached by a document that named nothing.
+func TestObjectsFromManifestRejectsDocumentWithoutKind(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		manifest string
+	}{
+		{
+			name:     "no kind",
+			manifest: "apiVersion: cluster.x-k8s.io/v1beta1\nmetadata:\n  name: test\n",
+		},
+		{
+			name:     "kind but no apiVersion",
+			manifest: "kind: Cluster\nmetadata:\n  name: test\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ObjectsFromManifest("cluster.yaml", []byte(tc.manifest))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "cluster.yaml", "the error must name the file")
+			assert.Regexp(t, `missing|no apiVersion`, err.Error(), "the error must say what was absent")
+		})
+	}
+}

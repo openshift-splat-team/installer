@@ -35,6 +35,7 @@ import (
 	"github.com/openshift/installer/pkg/clusterapi/internal/process/addr"
 	"github.com/openshift/installer/pkg/types/aws"
 	"github.com/openshift/installer/pkg/types/azure"
+	"github.com/openshift/installer/pkg/types/external"
 	"github.com/openshift/installer/pkg/types/gcp"
 	"github.com/openshift/installer/pkg/types/ibmcloud"
 	"github.com/openshift/installer/pkg/types/nutanix"
@@ -457,6 +458,15 @@ func (c *system) Run(ctx context.Context) error { //nolint:gocyclo
 			}
 		}
 		controllers = append(controllers, controller)
+	case external.Name:
+		// The provider is not compiled into the installer: its binary and its
+		// CRDs come from the user, resolved and validated by the External
+		// provider's PreProvision hook, which runs before this function.
+		spec := getExternalProvider()
+		if spec == nil {
+			return fmt.Errorf("no Cluster API infrastructure provider configured for the %s platform", external.Name)
+		}
+		controllers = append(controllers, c.externalInfrastructureController(spec))
 	default:
 		return fmt.Errorf("unsupported platform %q", platform)
 	}
@@ -681,7 +691,14 @@ func (c *system) runController(ctx context.Context, ct *controller) error {
 		args := make([]string, 0, len(ct.Args))
 		for _, arg := range ct.Args {
 			final := new(bytes.Buffer)
-			tmpl := template.Must(template.New("arg").Funcs(funcs).Parse(arg))
+			// Not template.Must: for a user-supplied provider these strings
+			// come from install-config, so a malformed one is a user error to
+			// report, not a panic in a process that has already started etcd
+			// and the kube-apiserver.
+			tmpl, err := template.New("arg").Funcs(funcs).Parse(arg)
+			if err != nil {
+				return fmt.Errorf("failed to parse controller %q arg %q: %w", ct.Name, arg, err)
+			}
 			if err := tmpl.Execute(final, templateData); err != nil {
 				return fmt.Errorf("failed to render controller %q arg %q: %w", ct.Name, arg, err)
 			}

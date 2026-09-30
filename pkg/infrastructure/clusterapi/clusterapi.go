@@ -23,6 +23,7 @@ import (
 	utilkubeconfig "sigs.k8s.io/cluster-api/util/kubeconfig"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/installer/cmd/openshift-install/command"
 	"github.com/openshift/installer/pkg/asset"
 	"github.com/openshift/installer/pkg/asset/cluster/metadata"
 	"github.com/openshift/installer/pkg/asset/cluster/tfvars"
@@ -104,17 +105,10 @@ func (i *InfraProvider) Provision(ctx context.Context, dir string, parents asset
 		rootCA,
 	)
 
-	var capiClusters []*clusterv1.Cluster
-
 	// Collect cluster and non-machine-related infra manifests
 	// to be applied during the initial stage.
 	infraManifests := []client.Object{}
 	for _, m := range capiManifestsAsset.RuntimeFiles() {
-		// Check for cluster definition so that we can collect the names.
-		if cluster, ok := m.Object.(*clusterv1.Cluster); ok {
-			capiClusters = append(capiClusters, cluster)
-		}
-
 		infraManifests = append(infraManifests, m.Object)
 	}
 
@@ -123,6 +117,52 @@ func (i *InfraProvider) Provision(ctx context.Context, dir string, parents asset
 	machineManifests := []client.Object{}
 	for _, m := range capiMachinesAsset.RuntimeFiles() {
 		machineManifests = append(machineManifests, m.Object)
+	}
+
+	// A platform whose manifests the installer does not generate supplies
+	// them here. Appending keeps the objects the installer established
+	// first -- the namespace everything is created into -- ahead of the
+	// user's, and everything below treats both sources identically.
+	if mp, ok := i.impl.(ManifestProvider); ok {
+		extraInfra, extraMachines, err := mp.ProvideManifests(ctx, command.RootOpts.Dir)
+		if err != nil {
+			return fileList, fmt.Errorf("failed to load the Cluster API manifests for the %s provider: %w", i.impl.Name(), err)
+		}
+		infraManifests = append(infraManifests, extraInfra...)
+		machineManifests = append(machineManifests, extraMachines...)
+	}
+
+	// Collect the cluster names once every source has contributed: the
+	// installer waits on these for infrastructure readiness, so a Cluster
+	// missed here would be created and then never waited for.
+	var capiClusters []*clusterv1.Cluster
+	for _, m := range infraManifests {
+		if cluster, ok := m.(*clusterv1.Cluster); ok {
+			capiClusters = append(capiClusters, cluster)
+		}
+	}
+
+	// Reject kinds this installer has no type for, unless the platform's
+	// provider is user-supplied and so legitimately uses them. This runs
+	// before PreProvision, so it is before any cloud resource exists.
+	tolerate := false
+	if t, ok := i.impl.(UnstructuredManifestTolerator); ok {
+		tolerate = t.TolerateUnstructuredManifests()
+	}
+	if !tolerate {
+		for _, m := range append(append([]client.Object{}, infraManifests...), machineManifests...) {
+			if u, ok := m.(*unstructured.Unstructured); ok {
+				return fileList, fmt.Errorf("manifest %s/%s declares kind %s, which is not known to this installer: "+
+					"check the kind and apiVersion in the %q directory",
+					u.GetNamespace(), u.GetName(), u.GroupVersionKind(), capiutils.ManifestDir)
+			}
+		}
+	}
+
+	if v, ok := i.impl.(ManifestValidator); ok {
+		if err := v.ValidateManifests(infraManifests, machineManifests); err != nil {
+			return fileList, fmt.Errorf("invalid Cluster API manifests: %w", err)
+		}
 	}
 
 	if p, ok := i.impl.(PreProvider); ok {
@@ -275,6 +315,24 @@ func (i *InfraProvider) Provision(ctx context.Context, dir string, parents asset
 		timer.StopTimer(infrastructureReadyStage)
 	} else {
 		logrus.Debugf("No infrastructure ready requirements for the %s provider", i.impl.Name())
+	}
+
+	// Developer aid: stop once the infrastructure is ready, before any
+	// machine is created.
+	//
+	// Bringing up a Cluster API provider the installer was never compiled
+	// against is iterative, and the network infrastructure is where almost
+	// all of that iteration happens. Stopping here keeps each attempt to the
+	// cost of a network rather than a control plane, and leaves the
+	// infrastructure in place to be inspected.
+	//
+	// It aborts the install, and says so: the cluster is not created, the
+	// command fails, and nothing cleans up after it. The resources are the
+	// operator's to remove.
+	if v, ok := os.LookupEnv("OPENSHIFT_INSTALL_INFRASTRUCTURE_ONLY"); ok && v != "" {
+		logrus.Warn("OPENSHIFT_INSTALL_INFRASTRUCTURE_ONLY is set: stopping after infrastructure ready.")
+		logrus.Warn("No machines were created and no cluster was installed. Provisioned infrastructure is left in place and must be removed manually.")
+		return fileList, fmt.Errorf("stopped after infrastructure ready because OPENSHIFT_INSTALL_INFRASTRUCTURE_ONLY is set")
 	}
 
 	masterIgnData := masterIgnAsset.Files()[0].Data

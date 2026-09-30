@@ -554,7 +554,16 @@ func (c *system) Teardown() {
 			logrus.Warn("Timed out waiting for local Cluster API system to shut down")
 		}
 
-		c.logWriter.Close()
+		// Only if we got far enough to create it. Run assigns logWriter well
+		// after it assigns lcp, so every failure in between reaches here with
+		// a nil writer -- and Close on a nil *io.PipeWriter panics. Teardown
+		// is registered as a logrus exit handler, so that panic surfaces as
+		// "Logrus exit handler error: invalid memory address" in place of the
+		// error that was actually being reported, which is how a failed
+		// `destroy cluster` came to look like a crash in the logger.
+		if c.logWriter != nil {
+			c.logWriter.Close()
+		}
 	})
 }
 

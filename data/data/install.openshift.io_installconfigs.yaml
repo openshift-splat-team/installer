@@ -6622,6 +6622,31 @@ spec:
                           Remote references and digest pinning are TBD after the pilot, as for
                           BinaryPath.
                         type: string
+                      hooks:
+                        description: Hooks names programs the installer runs at fixed
+                          points in the install.
+                        properties:
+                          infraReady:
+                            description: |-
+                              InfraReady names a program run once the Cluster reports
+                              status.infrastructureReady, after the provider has created the network
+                              and load balancers and before any machine is created. It is the point
+                              at which the load balancer addresses first exist and the last point at
+                              which DNS can be created in time for the bootstrap node to use it.
+                            type: string
+                          preDestroy:
+                            description: |-
+                              PreDestroy names a program run by `destroy cluster` after the local
+                              control plane has been restored and before the Cluster is deleted.
+
+                              It is the counterpart of InfraReady and exists because that hook's
+                              resources are invisible to Cluster API: deleting the Cluster removes
+                              what the provider built and nothing else. Running before the delete
+                              rather than after is deliberate -- a DNS alias record is described in
+                              terms of the load balancer it points at, so it is cheaper to remove
+                              while that load balancer still exists.
+                            type: string
+                        type: object
                       name:
                         description: |-
                           Name identifies the provider, for example "oci". It names the controller

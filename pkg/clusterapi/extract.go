@@ -198,12 +198,9 @@ func (e *ExtractedProvider) InstallConfigSnippet() string {
 	}
 
 	// platform.external.clusterAPI sits four spaces in, and its fields six.
-	var b strings.Builder
-	b.WriteString("    clusterAPI:\n")
+	lines := []string{"    clusterAPI:"}
 	for _, line := range strings.Split(strings.TrimRight(string(body), "\n"), "\n") {
-		b.WriteString("      ")
-		b.WriteString(line)
-		b.WriteString("\n")
+		lines = append(lines, "      "+line)
 	}
-	return b.String()
+	return strings.Join(lines, "\n") + "\n"
 }

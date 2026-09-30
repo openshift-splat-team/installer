@@ -138,7 +138,7 @@ func (c *Cluster) Generate(ctx context.Context, parents asset.Parents) (err erro
 		}
 	}
 
-	provider, err := infra.ProviderForPlatform(platform, installConfig.Config.EnabledFeatureGates())
+	provider, err := infra.ProviderForPlatform(platform, installConfig.Config, installConfig.Config.EnabledFeatureGates())
 	if err != nil {
 		return fmt.Errorf("error getting infrastructure provider: %w", err)
 	}

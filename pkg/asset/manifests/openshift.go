@@ -1,9 +1,12 @@
 package manifests
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,6 +18,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/installer/cmd/openshift-install/command"
@@ -381,6 +385,14 @@ func externalExtraManifests(installDir string, generated sets.Set[string]) ([]*a
 		if err != nil {
 			return nil, fmt.Errorf("failed to read %s: %w", path, err)
 		}
+		if n, err := countManifestDocuments(data); err != nil {
+			return nil, fmt.Errorf("failed to parse %s: %w", path, err)
+		} else if n > 1 {
+			return nil, fmt.Errorf("the %s manifest %s contains %d objects: "+
+				"split it so each file holds exactly one, since the bootstrap node applies "+
+				"the %q directory one object per file and silently ignores the rest",
+				externaltypes.ExtraManifestDir, entry.Name(), n, openshiftManifestDir)
+		}
 		files = append(files, &asset.File{
 			Filename: filepath.Join(openshiftManifestDir, entry.Name()),
 			Data:     data,
@@ -392,6 +404,47 @@ func externalExtraManifests(installDir string, generated sets.Set[string]) ([]*a
 			externaltypes.Name, entry.Name(), len(data))
 	}
 	return files, nil
+}
+
+// countManifestDocuments returns the number of non-empty YAML documents in a
+// manifest file.
+//
+// This exists because of a failure that cost a cluster its worker nodes and
+// reported nothing. A file in the extra manifest directory held two
+// MachineConfigs -- one for the master pool, one for the worker pool -- in the
+// ordinary multi-document form any `kubectl apply -f` accepts. The installer
+// copied it through byte for byte, as it should. The bootstrap node then
+// applied the first object and dropped the second without a word, so the
+// worker pool never got its providerID drop-in, its kubelet registered a Node
+// with no providerID, and the cloud controller manager deleted that Node as an
+// instance it could not find. The install still reported success.
+//
+// Every manifest the installer itself writes into the openshift directory
+// holds exactly one object, which is why this was never exercised before a
+// user-supplied file arrived. Refusing here turns a silent, far-away node
+// deletion into a message naming the file, and costs a user one `csplit`.
+func countManifestDocuments(data []byte) (int, error) {
+	reader := utilyaml.NewYAMLReader(bufio.NewReader(bytes.NewReader(data)))
+	count := 0
+	for {
+		doc, err := reader.Read()
+		if errors.Is(err, io.EOF) {
+			return count, nil
+		}
+		if err != nil {
+			return 0, err
+		}
+		// Comment-only and whitespace-only documents are not objects. A file
+		// that leads with a licence header and a `---` is the common shape and
+		// must not be counted as two.
+		var obj interface{}
+		if err := yaml.Unmarshal(doc, &obj); err != nil {
+			return 0, err
+		}
+		if obj != nil {
+			count++
+		}
+	}
 }
 
 // manifestFileExtensions are the extensions read from the extra manifest

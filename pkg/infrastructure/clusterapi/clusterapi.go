@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,6 +21,7 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	utilkubeconfig "sigs.k8s.io/cluster-api/util/kubeconfig"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/installer/cmd/openshift-install/command"
 	"github.com/openshift/installer/pkg/asset"
@@ -543,10 +543,13 @@ func (i *InfraProvider) DestroyBootstrap(ctx context.Context, dir string) error 
 	return nil
 }
 
+// machineManifest reads back the files collectManifests wrote. The tags are
+// json because sigs.k8s.io/yaml routes through json, so both ends of that
+// round trip agree by construction rather than by coincidence.
 type machineManifest struct {
 	Status struct {
-		Addresses []clusterv1.MachineAddress `yaml:"addresses"`
-	} `yaml:"status"`
+		Addresses []clusterv1.MachineAddress `json:"addresses"`
+	} `json:"status"`
 }
 
 // extractIPAddress extracts the IP address from a machine manifest file in a
@@ -687,6 +690,13 @@ func (i *InfraProvider) collectManifests(ctx context.Context, cl client.Client) 
 		}
 
 		fileName := filepath.Join(clusterapi.ArtifactsDir, fmt.Sprintf("%s-%s-%s.yaml", gvk.Kind, m.GetNamespace(), m.GetName()))
+
+		// A typed object read back through the client has an empty TypeMeta,
+		// so the apiVersion and kind have to be restored explicitly. Without
+		// them the file is not a manifest: nothing can tell what it describes,
+		// and it cannot be re-applied.
+		m.GetObjectKind().SetGroupVersionKind(gvk)
+
 		objData, err := yaml.Marshal(m)
 		if err != nil {
 			errorList = append(errorList, fmt.Errorf("failed to marshal manifest %s: %w", fileName, err))

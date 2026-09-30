@@ -462,9 +462,16 @@ func (c *system) Run(ctx context.Context) error { //nolint:gocyclo
 		// The provider is not compiled into the installer: its binary and its
 		// CRDs come from the user, resolved and validated by the External
 		// provider's PreProvision hook, which runs before this function.
+		//
+		// The destroy paths reach this function without PreProvision having
+		// run, so an unset spec is expected there rather than an error: fall
+		// back to what the install recorded in metadata.json.
 		spec := getExternalProvider()
 		if spec == nil {
-			return fmt.Errorf("no Cluster API infrastructure provider configured for the %s platform", external.Name)
+			if err := SetExternalProviderFromMetadata(metadata.External); err != nil {
+				return fmt.Errorf("no Cluster API infrastructure provider configured for the %s platform: %w", external.Name, err)
+			}
+			spec = getExternalProvider()
 		}
 		controllers = append(controllers, c.externalInfrastructureController(spec))
 	default:

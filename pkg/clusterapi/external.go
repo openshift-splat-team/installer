@@ -5,6 +5,8 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/openshift/installer/pkg/types/external"
 )
 
 // ExternalProviderSpec describes a Cluster API infrastructure provider that the
@@ -92,6 +94,35 @@ func SetExternalProvider(spec *ExternalProviderSpec) error {
 	defer externalProvider.Unlock()
 	externalProvider.spec = resolved
 	return nil
+}
+
+// SetExternalProviderFromMetadata recovers the provider spec from
+// metadata.json for a command that never ran PreProvision.
+//
+// PreProvision is the only caller of SetExternalProvider, and it runs on the
+// provisioning path alone. Both destroy paths -- `destroy bootstrap`, which is
+// also a normal step of `create cluster`, and `destroy cluster` -- reach
+// System.Run without it, so the in-process spec is nil and the local control
+// plane has no infrastructure provider to start. Recording the artifact
+// locations in metadata.json is what makes them recoverable.
+//
+// Validation is deliberately not relaxed for this path. A binary that has been
+// moved, replaced with a different architecture, or emptied since install
+// should fail here, naming the path, rather than start a provider that cannot
+// act and let destroy report success having deleted nothing.
+func SetExternalProviderFromMetadata(md *external.Metadata) error {
+	if md == nil || md.ClusterAPI == nil {
+		return fmt.Errorf("metadata.json records no Cluster API infrastructure provider for the %s platform; "+
+			"it was written by an installer that did not provision infrastructure, or by one too old to record the provider",
+			external.Name)
+	}
+
+	return SetExternalProvider(&ExternalProviderSpec{
+		Name:           md.ClusterAPI.Name,
+		BinaryPath:     md.ClusterAPI.BinaryPath,
+		ComponentsPath: md.ClusterAPI.ComponentsPath,
+		Args:           md.ClusterAPI.Args,
+	})
 }
 
 // getExternalProvider returns the spec recorded by SetExternalProvider, or nil

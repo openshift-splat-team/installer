@@ -177,7 +177,7 @@ func (in *ClusterPlatformMetadata) DeepCopyInto(out *ClusterPlatformMetadata) {
 	if in.External != nil {
 		in, out := &in.External, &out.External
 		*out = new(external.Metadata)
-		**out = **in
+		(*in).DeepCopyInto(*out)
 	}
 	return
 }

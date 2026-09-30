@@ -494,13 +494,23 @@ func (i *InfraProvider) DestroyBootstrap(ctx context.Context, dir string) error 
 
 	machineName := capiutils.GenerateBoostrapMachineName(metadata.InfraID)
 	machineNamespace := capiutils.Namespace
+	// A missing bootstrap machine is not an error. This step is reached both
+	// from `destroy bootstrap` and from the ordinary `create cluster` flow, so
+	// it runs again on a re-run after an interrupted destroy, and it runs at
+	// all on an install that never created a bootstrap machine -- which is the
+	// case for platform: external, where the installer generates no machine
+	// manifests (pkg/asset/machines/clusterapi.go) and the user may supply
+	// none. Treating absence as failure aborts an otherwise complete install
+	// after the cluster is already up.
 	if err := sys.Client().Delete(ctx, &clusterv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machineName,
 			Namespace: machineNamespace,
 		},
-	}); err != nil {
+	}); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("failed to delete bootstrap machine: %w", err)
+	} else if err != nil {
+		logrus.Debugf("No bootstrap machine %s/%s to delete", machineNamespace, machineName)
 	}
 
 	machineDeletionTimeout := 5 * time.Minute

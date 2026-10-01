@@ -1,0 +1,90 @@
+# Bootstrap machine for a `platform: external` install driven by CAPOCI.
+#
+# STATUS: NEVER RUN. See ../cluster.yaml.
+#
+# THE SINGLE MOST FRAGILE FILE IN THIS EXAMPLE, because of the 32,000-byte
+# metadata cap. CAPOCI base64-encodes the bootstrap data into
+# metadata.user_data (cloud/scope/machine.go:353) and OCI rejects the launch if
+# user_data plus the rest of metadata exceeds 32,000 bytes. bootstrap.ign is
+# hundreds of kilobytes.
+#
+# CAPOCI has no object-store offload -- no equivalent of CAPA's
+# AWSCluster.spec.s3Bucket / AWSMachine.spec.ignition.storageType. So nothing
+# here can fix it, and nothing in this file tries to. The fix is OUTSIDE the
+# manifest: run-create-command.sh uploads the real bootstrap.ign to OCI Object
+# Storage and overwrites the on-disk bootstrap.ign with a ~300-byte pointer
+# config BEFORE `create cluster` reads it. See ../../docs/ignition-delivery.md.
+#
+# So by the time this Machine is created, CLUSTER-ID-bootstrap holds the
+# pointer, not the payload, and the size problem is already gone.
+#
+# Tokens rewritten by run-create-command.sh:
+#   CLUSTER-ID        -> the run's infrastructure ID
+#   IMAGE-OCID        -> the imported RHCOS custom image OCID
+#   COMPARTMENT-OCID  -> $OCI_COMPARTMENT_ID
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Machine
+metadata:
+  name: CLUSTER-ID-bootstrap
+  namespace: openshift-cluster-api-guests
+  labels:
+    cluster.x-k8s.io/control-plane: ""
+spec:
+  clusterName: CLUSTER-ID
+  bootstrap:
+    # The installer chooses this name; nobody else can. It is built from the
+    # infrastructure ID in pkg/infrastructure/external/clusterapi/ignition.go,
+    # which is why this tree must be rewritten between `create manifests` and
+    # `create cluster`. See README.md.
+    dataSecretName: CLUSTER-ID-bootstrap
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+    kind: OCIMachine
+    name: CLUSTER-ID-bootstrap
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: OCIMachine
+metadata:
+  name: CLUSTER-ID-bootstrap
+  namespace: openshift-cluster-api-guests
+  labels:
+    cluster.x-k8s.io/control-plane: ""
+    install.openshift.io/bootstrap: ""
+spec:
+  compartmentId: COMPARTMENT-OCID
+  # No selector exists for this. OCIMachine.spec.imageId is a bare OCID --
+  # there is no imageLookup or tag filter as CAPA has for AMIs -- so the
+  # imported RHCOS image's OCID must be substituted in. Which image, and
+  # whether a usable one can be built at all, is the open blocker in
+  # ../../docs/boot-image.md.
+  imageId: IMAGE-OCID
+  shape: VM.Standard.E4.Flex
+  shapeConfig:
+    ocpus: "4"
+    memoryInGBs: "16"
+  bootVolumeSizeInGBs: "120"
+  # Public, because the bootstrap machine must be reachable for log gathering
+  # and because it needs egress to pull the release payload. The masters do
+  # not. Mirrors the aws-capa example, where only the bootstrap has publicIP.
+  networkDetails:
+    # By NAME, not by OCID. This is what makes the manifest writable before the
+    # infrastructure exists -- the same property the AWS example gets from
+    # subnet.filters. The string must match a subnet declared in
+    # ../cluster.yaml.
+    subnetName: CLUSTER-ID-subnet-cp-endpoint
+    assignPublicIp: true
+  freeformTags:
+    openshift-cluster-id: CLUSTER-ID
+    kubernetes.io/cluster/CLUSTER-ID: owned
+    # Read by hooks/infra-hook.sh at postProvision to find the instances that
+    # must become backends of the 22623 listener.
+    openshift-machine-role: bootstrap
+  # metadata is merged into the instance metadata at cloud/scope/machine.go:351,
+  # BEFORE user_data is assigned at :353 -- so nothing here can shadow the
+  # bootstrap payload even by accident.
+  #
+  # ssh_authorized_keys is how OCI conventionally delivers an SSH key. It is
+  # left empty here: RHCOS takes its SSH key from Ignition, not from OCI
+  # metadata, and every byte spent here comes out of the 32,000-byte budget.
+  metadata: {}

@@ -1,0 +1,161 @@
+# Control-plane machines for a `platform: external` install driven by CAPOCI.
+#
+# STATUS: NEVER RUN. See ../cluster.yaml.
+#
+# Three machines sharing one ignition Secret, CLUSTER-ID-master. Ignition
+# Secrets are per ROLE, not per machine: there is no per-machine master Secret
+# to point at and no way to ask for one. The installer publishes exactly three
+# -- bootstrap, master, worker -- from
+# pkg/infrastructure/external/clusterapi/ignition.go.
+#
+# WHAT IS DIFFERENT FROM BOOTSTRAP
+#
+# 1. No size problem. master.ign is a POINTER config of roughly 1.6 KiB: a
+#    merge source and the root CA, nothing else. That fits OCI's 32,000-byte
+#    metadata budget with room to spare, so masters need none of the object
+#    storage detour the bootstrap machine needs
+#    (../../docs/ignition-delivery.md).
+#
+# 2. Private subnet, no public IP.
+#
+# 3. The pointer is why BOTH hooks have to exist. It aims at
+#    https://api-int.<clusterDomain>:22623/config/master, and that requires
+#    two things nothing else on this platform provides:
+#
+#      - the NAME must resolve from inside the VCN. Created by
+#        hooks/infra-hook.sh at infraReady.
+#      - port 22623 must be SERVED by the API load balancer. CAPOCI's NLB has
+#        a single 6443 listener and no field for another, so the hook adds a
+#        listener and backend set out of band -- see ../cluster.yaml for why
+#        that survives reconcile, and ../../docs/capi-requirements.md §8 for
+#        the open question about populating its backends.
+#
+#    A master will still reach Running without either -- CAPI only wants a
+#    phase and an address -- so the install looks healthy for about forty
+#    minutes and then fails in bootkube. On the aws-capa pilot the failing
+#    stage was `resolve-api-int-url`.
+#
+# Tokens rewritten by run-create-command.sh:
+#   CLUSTER-ID        -> the run's infrastructure ID
+#   IMAGE-OCID        -> the imported RHCOS custom image OCID
+#   COMPARTMENT-OCID  -> $OCI_COMPARTMENT_ID
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Machine
+metadata:
+  name: CLUSTER-ID-master-0
+  namespace: openshift-cluster-api-guests
+  labels:
+    cluster.x-k8s.io/control-plane: ""
+spec:
+  clusterName: CLUSTER-ID
+  bootstrap:
+    dataSecretName: CLUSTER-ID-master
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+    kind: OCIMachine
+    name: CLUSTER-ID-master-0
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: OCIMachine
+metadata:
+  name: CLUSTER-ID-master-0
+  namespace: openshift-cluster-api-guests
+  labels:
+    cluster.x-k8s.io/control-plane: ""
+spec:
+  compartmentId: COMPARTMENT-OCID
+  imageId: IMAGE-OCID
+  shape: VM.Standard.E4.Flex
+  shapeConfig:
+    ocpus: "4"
+    memoryInGBs: "16"
+  bootVolumeSizeInGBs: "120"
+  networkDetails:
+    subnetName: CLUSTER-ID-subnet-control-plane
+    assignPublicIp: false
+  freeformTags:
+    openshift-cluster-id: CLUSTER-ID
+    kubernetes.io/cluster/CLUSTER-ID: owned
+    openshift-machine-role: master
+  metadata: {}
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Machine
+metadata:
+  name: CLUSTER-ID-master-1
+  namespace: openshift-cluster-api-guests
+  labels:
+    cluster.x-k8s.io/control-plane: ""
+spec:
+  clusterName: CLUSTER-ID
+  bootstrap:
+    dataSecretName: CLUSTER-ID-master
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+    kind: OCIMachine
+    name: CLUSTER-ID-master-1
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: OCIMachine
+metadata:
+  name: CLUSTER-ID-master-1
+  namespace: openshift-cluster-api-guests
+  labels:
+    cluster.x-k8s.io/control-plane: ""
+spec:
+  compartmentId: COMPARTMENT-OCID
+  imageId: IMAGE-OCID
+  shape: VM.Standard.E4.Flex
+  shapeConfig:
+    ocpus: "4"
+    memoryInGBs: "16"
+  bootVolumeSizeInGBs: "120"
+  networkDetails:
+    subnetName: CLUSTER-ID-subnet-control-plane
+    assignPublicIp: false
+  freeformTags:
+    openshift-cluster-id: CLUSTER-ID
+    kubernetes.io/cluster/CLUSTER-ID: owned
+    openshift-machine-role: master
+  metadata: {}
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Machine
+metadata:
+  name: CLUSTER-ID-master-2
+  namespace: openshift-cluster-api-guests
+  labels:
+    cluster.x-k8s.io/control-plane: ""
+spec:
+  clusterName: CLUSTER-ID
+  bootstrap:
+    dataSecretName: CLUSTER-ID-master
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+    kind: OCIMachine
+    name: CLUSTER-ID-master-2
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: OCIMachine
+metadata:
+  name: CLUSTER-ID-master-2
+  namespace: openshift-cluster-api-guests
+  labels:
+    cluster.x-k8s.io/control-plane: ""
+spec:
+  compartmentId: COMPARTMENT-OCID
+  imageId: IMAGE-OCID
+  shape: VM.Standard.E4.Flex
+  shapeConfig:
+    ocpus: "4"
+    memoryInGBs: "16"
+  bootVolumeSizeInGBs: "120"
+  networkDetails:
+    subnetName: CLUSTER-ID-subnet-control-plane
+    assignPublicIp: false
+  freeformTags:
+    openshift-cluster-id: CLUSTER-ID
+    kubernetes.io/cluster/CLUSTER-ID: owned
+    openshift-machine-role: master
+  metadata: {}

@@ -1,0 +1,172 @@
+# Cluster API manifests for a `platform: external` install driven by CAPOCI.
+#
+# STATUS: NEVER RUN. Written 2026-09-30 from the CAPOCI type definitions, with
+# no OCI account available. The aws-capa sibling of this file was derived from
+# a captured, working install; this one was not. Treat every value as a
+# proposal until a run contradicts it.
+#
+# These are USER-SUPPLIED. The installer generates nothing for this platform:
+# it does not know the provider's API. It reads this directory, creates what it
+# finds in its temporary local control plane, and waits for
+# Cluster.status.infrastructureReady.
+#
+# `scripts/run-create-command.sh` rewrites `CLUSTER-ID` to the run's
+# INFRASTRUCTURE ID before `create cluster`, so that token is the name
+# placeholder and must not be used for anything else. See
+# machines/README.md for why the substitution has to happen and why it forces
+# a multi-phase workflow.
+#
+# Namespace: the installer forces every object into
+# openshift-cluster-api-guests (pkg/infrastructure/clusterapi/clusterapi.go:183),
+# so these values are for readability, not load-bearing.
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: CLUSTER-ID
+  namespace: openshift-cluster-api-guests
+spec:
+  clusterNetwork:
+    apiServerPort: 6443
+  controlPlaneEndpoint:
+    host: ""
+    port: 0
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+    kind: OCICluster
+    name: CLUSTER-ID
+    namespace: openshift-cluster-api-guests
+---
+# Provider credentials.
+#
+# OCIClusterIdentity points at a Secret whose keys CAPOCI reads in
+# cloud/util/util.go:132-137 -- tenancy, user, fingerprint, key, and optionally
+# passphrase and region. The constants are in cloud/config/config.go:36-47.
+#
+# THE SECRET IS NOT IN THIS DIRECTORY, DELIBERATELY. It holds an OCI API
+# signing key. run-create-command.sh applies it to the local control plane from
+# a path outside the workspace, so a private key never lands in a tree that
+# gets archived, copied or published. See scripts/README.md.
+#
+# This Secret lives ONLY in the installer's temporary local control plane
+# (envtest etcd + kube-apiserver). It is never delivered to the cluster being
+# installed. The installed cluster's own OCI access is instance-principal based
+# and carries no key at all -- see extra-manifests/README.md.
+#
+# allowedNamespaces is enforced at cloud/util/util.go:331. An empty selector
+# with a null list means "any namespace", which is what the installer needs
+# since it forces everything into openshift-cluster-api-guests.
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: OCIClusterIdentity
+metadata:
+  name: CLUSTER-ID-identity
+  namespace: openshift-cluster-api-guests
+spec:
+  type: UserPrincipal
+  principalSecret:
+    name: CLUSTER-ID-oci-credentials
+    namespace: openshift-cluster-api-guests
+  allowedNamespaces: {}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+kind: OCICluster
+metadata:
+  name: CLUSTER-ID
+  namespace: openshift-cluster-api-guests
+spec:
+  # Substituted by run-create-command.sh from $OCI_COMPARTMENT_ID.
+  compartmentId: COMPARTMENT-OCID
+  region: REGION
+  identityRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+    kind: OCIClusterIdentity
+    name: CLUSTER-ID-identity
+    namespace: openshift-cluster-api-guests
+  # Tagged the way the in-cluster consumers expect. The OCI CCM matches on
+  # these when it looks for the cluster's own resources.
+  freeformTags:
+    openshift-cluster-id: CLUSTER-ID
+    kubernetes.io/cluster/CLUSTER-ID: owned
+  controlPlaneEndpoint:
+    host: ""
+    port: 0
+  networkSpec:
+    vcn:
+      name: CLUSTER-ID-vcn
+      cidr: 10.0.0.0/16
+      dnsLabel: CLUSTERDNS
+      # Subnet names here are what machines reference by `subnetName`, so these
+      # strings are a contract with machines/*.yaml. Roles are the values
+      # CAPOCI accepts for an OCICluster (api/v1beta2/types.go:31):
+      # control-plane, control-plane-endpoint, worker, service-lb, custom.
+      #
+      # The CIDRs differ from CAPOCI's own defaults
+      # (api/v1beta2/constants.go:21-32), which give the control-plane machine
+      # subnet a /29 -- eight addresses, three of them reserved by OCI. That
+      # leaves five usable for three masters plus a bootstrap, which works but
+      # has no headroom and no room for a replacement machine. Widened to /27.
+      subnets:
+      - role: control-plane-endpoint
+        name: CLUSTER-ID-subnet-cp-endpoint
+        cidr: 10.0.0.0/27
+        type: public
+      - role: control-plane
+        name: CLUSTER-ID-subnet-control-plane
+        cidr: 10.0.0.32/27
+        type: private
+      - role: worker
+        name: CLUSTER-ID-subnet-worker
+        cidr: 10.0.64.0/20
+        type: private
+      # The OCI CCM creates LoadBalancer Services into this subnet, and its
+      # OCID is one of the four values the CCM config needs. The infraReady
+      # hook reads it back out of
+      # .spec.networkSpec.vcn.subnets[] | select(.role=="service-lb") | .id
+      # -- CAPOCI writes the created OCID into the SPEC, not into status
+      # (cloud/scope/subnet_reconciler.go, desiredSubnet.ID = subnet.Id).
+      - role: service-lb
+        name: CLUSTER-ID-subnet-service-lb
+        cidr: 10.0.32.0/27
+        type: public
+    # The API server load balancer.
+    #
+    # ONE LISTENER, ON 6443. This is CAPOCI gap #1 and the pilot's primary
+    # risk. Every port in both load-balancer reconcilers is APIServerPort()
+    # (network_load_balancer_reconciler.go:55,72,187; and the LBaaS equivalents
+    # at load_balancer_reconciler.go:52,69,151,158). There is no field here for
+    # a second listener -- CAPA has controlPlaneLoadBalancer.additionalListeners
+    # and CAPOCI has no equivalent.
+    #
+    # Control-plane machines fetch their real config from
+    # https://api-int.<clusterDomain>:22623/config/master, so 22623 must be
+    # served. hooks/infra-hook.sh adds that listener and a second backend set
+    # out of band at infraReady, and populates it at postProvision.
+    #
+    # That is safe from reconcile: IsNLBEqual compares only the display name
+    # and the apiserver-lb-backendset health checker
+    # (network_load_balancer_reconciler.go:301-320), and UpdateNLB sends only
+    # DisplayName plus that health checker (:122-150). Neither enumerates
+    # listeners, so a hook-created one is not pruned.
+    #
+    # loadBalancerType is left unset, which selects the NETWORK load balancer
+    # path at controllers/ocicluster_controller.go:262-270. Only the literal
+    # value "LB" takes the LBaaS path.
+    apiServerLoadBalancer:
+      name: CLUSTER-ID-apiserver
+      networkVisibility: Public
+  # availabilityDomains is DELIBERATELY ABSENT.
+  #
+  # CAPOCI populates it itself: cloud/scope/cluster.go:137-141 reads the
+  # current value and, when it is empty, calls ListAvailabilityDomains against
+  # the compartment, then writes the result back with SetAvailabilityDomains
+  # at :228. Machines pick an AD from that map (cloud/scope/machine.go:510).
+  #
+  # Supplying an empty map rather than omitting the key risks being read as
+  # "zero availability domains" rather than "not specified", so the key is
+  # left out entirely.
+  #
+  # Consequence worth stating: this example does not pin machines to
+  # particular availability domains, so the three masters may or may not be
+  # spread. That matches the aws-capa example's one-AZ departure in spirit --
+  # this is a mechanism pilot, not an availability test -- but it is less
+  # deliberate. Pin ADs before drawing any HA conclusion from a run.

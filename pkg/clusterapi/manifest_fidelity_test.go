@@ -202,15 +202,30 @@ spec:
 	}
 }
 
-// TestPilotManifestDoesNotDropFields runs the same check against the pilot's
-// real manifest when it is available, so drift in that file is caught too. It
-// skips when the workspace is not checked out alongside the clone.
-func TestPilotManifestDoesNotDropFields(t *testing.T) {
-	path := filepath.Join("..", "..", "..", "install-dirs", "external-install", "cluster.yaml")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Skipf("pilot manifest not present: %v", err)
+// TestPublishedExampleManifestsDoNotDropFields runs the same check against
+// the example manifests this repository publishes, so drift in a file a
+// partner is told to copy is caught here rather than by the partner.
+//
+// It used to read the pilot's own working copy from a sibling workspace
+// directory and skip when that was absent, which meant it never ran anywhere
+// but one laptop. The examples are in the repository and are the artifact
+// that matters.
+func TestPublishedExampleManifestsDoNotDropFields(t *testing.T) {
+	paths, err := filepath.Glob(filepath.Join("..", "..", "upi", "external", "examples", "*", "external-install", "cluster.yaml"))
+	require.NoError(t, err)
+	require.NotEmpty(t, paths, "no published example cluster.yaml found")
+
+	for _, path := range paths {
+		t.Run(filepath.Base(filepath.Dir(filepath.Dir(path))), func(t *testing.T) {
+			checkManifestFidelity(t, path)
+		})
 	}
+}
+
+func checkManifestFidelity(t *testing.T, path string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
 
 	decoded, err := ObjectsFromManifest(path, data)
 	require.NoError(t, err)

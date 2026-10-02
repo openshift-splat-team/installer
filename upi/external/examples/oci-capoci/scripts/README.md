@@ -1,10 +1,22 @@
 # scripts
 
-**Status: never executed.** Written 2026-09-30 with no OCI account available.
-The aws-capa counterparts of these scripts were developed over a dozen installs
-and are reliable; these three are an executable description of the intended
-workflow, not tested automation. Expect `oci` CLI flag names and JSON shapes to
-need correction on first contact.
+**Status: executed, through to a complete cluster.** Written 2026-09-30 with no
+OCI account available, then corrected over thirteen runs on 2026-10-01. The
+warning this paragraph used to carry — *"expect `oci` CLI flag names and JSON
+shapes to need correction on first contact"* — was accurate, and the
+corrections are in the scripts. A sample of what first contact cost:
+
+| Guessed | Actual |
+| --- | --- |
+| `oci nlb network-load-balancer update --network-security-group-ids` | `... update-network-security-groups`, and it needs `--force` |
+| `oci nlb backend-health list-backend-set-health` | `oci nlb backend-health get` |
+| jmespath ``protocol==`6` `` | `protocol=='6'` — the field is a string |
+
+**Run 13 was salvaged by hand**, so these scripts have not yet driven an
+unattended install end to end: the CCM and CSI manifests were applied
+manually, four CSRs were approved manually, and the ingress Service and its
+NSG were created manually. Every one of those has since been written into the
+example — but the clean run that would prove it has not been spent.
 
 | Script | What it does |
 | --- | --- |
@@ -111,7 +123,7 @@ re-checks that the object is gone and fails loudly if it is not.
 | `OCI_COMPARTMENT_ID` | — | target compartment OCID |
 | `OCI_REGION` | — | e.g. `us-ashburn-1` |
 | `BASE_DOMAIN` | — | the DNS zone |
-| `OCI_IMAGE_ID` | — | **nothing provides this yet**; see `../docs/boot-image.md` |
+| `OCI_IMAGE_ID` | — | the imported RHCOS custom image OCID. **No RHCOS artifact for OCI is published**; the pilot imports the OpenStack QCOW2 and boots it with `ignition.platform.id=openstack`. That is a workaround with a visible cost — see below and `../docs/boot-image.md` |
 | `OCI_IGNITION_BUCKET` | — | private bucket, created once, reused |
 | `OCI_CREDENTIALS_FILE` | — | the `OCIClusterIdentity` Secret manifest, outside this workspace |
 | `PULL_SECRET_FILE` | `~/.oci/pull-secret.json` | passed by path, never read into a variable |
@@ -143,7 +155,26 @@ Local extraction is the pilot approach, matching what aws-capa did. Pulling the
 provider from a release image is the eventual answer and is out of scope here.
 
 CAPOCI pins `sigs.k8s.io/cluster-api v1.12.3` (`go.mod:25`) against the
-installer's `v1.13.4` (`go.mod:126`). Probably fine — CAPOCI imports both the
-`v1beta1` and `v1beta2` core API groups and the manifests here use `v1beta1` —
-but **unverified**. It fails cheaply, at the first reconcile, so it needs no
-work up front.
+installer's `v1.13.4` (`go.mod:126`). This was carried as "probably fine but
+unverified". **It is now verified by use**: thirteen runs, machines
+reconciled, `Cluster.Status.InfrastructureReady` observed by the installer.
+One version of skew in the core CAPI API is tolerated in practice. That is
+evidence, not a guarantee — nothing checks the skew and nothing would warn
+about a wider one.
+
+## Before publishing this example
+
+These scripts are the pilot's working copy and carry its fingerprints. Each of
+these is cosmetic, none affects behaviour, and all of them should go before a
+partner reads this:
+
+- `run-create-command.sh:68` builds the cluster name as `mrb-oci${N}`. A
+  partner needs `CLUSTER_NAME` as an input, not a hardcoded prefix and a
+  version counter.
+- `BASE_DOMAIN` is documented, but the install-config template and several
+  examples still show `splat.devcluster.openshift.com`.
+- The default `RELEASE_IMAGE` pins `5.1.0-ec.1`.
+
+The scripts are also written for a workspace where the installer clone sits at
+`../installer` (`OPENSHIFT_INSTALL_DATA` at `run-create-command.sh:300`), which
+will not hold for anyone else.

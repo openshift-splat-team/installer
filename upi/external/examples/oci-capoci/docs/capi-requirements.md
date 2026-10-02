@@ -31,7 +31,7 @@ real blockers that need a decision before any money is spent.
 | 1 | Provider treats bootstrap data as opaque (no Ignition feature gate) | **Fine** — better than CAPA |
 | 2 | Provider accepts the installer's four controller flags | **One mismatch** — solved by a `#!/bin/sh` shim, no installer change |
 | 3 | Provider credentials expressible in the local control plane | **Fine** — `identityRef`, symmetric with CAPA |
-| 4 | Machine manifests expressible as selectors, not post-provisioning IDs | **Fine** — `subnetName` / `nsgNames` |
+| 4 | Machine manifests expressible as selectors, not post-provisioning IDs | **Partial** — works by role-based defaulting, *not* by the name fields, which are ignored on the launch path |
 | 5 | Infra object exposes provisioned IDs to the `infraReady` hook | **Fine** — CAPOCI writes OCIDs back into `spec` |
 | 6 | A boot image exists that reads Ignition from OCI instance metadata | **Work item** — the capability ships, the image does not; see [boot-image.md](boot-image.md) |
 | 7 | Bootstrap Ignition fits in the provider's user-data channel | **BLOCKER** — 32,000-byte cap; see [ignition-delivery.md](ignition-delivery.md) |
@@ -179,17 +179,40 @@ infrastructure in a machine manifest could be written *before* the infrastructur
 existed, because CAPA accepts tag filters. The question was whether that was an
 AWS accident.
 
-It is not. `OCIMachine.spec.networkDetails` (`api/v1beta2/types.go`) offers both
-forms:
+It is not — but the mechanism is not the one the schema advertises, and the
+difference cost a destroyed bootstrap machine before it was found.
 
-| By ID | By name |
-| --- | --- |
-| `subnetId` | `subnetName` |
-| `nsgIds` | `nsgNames` |
+`OCIMachine.spec.networkDetails` (`api/v1beta2/types.go:38-65`) appears to offer
+both forms, `subnetId`/`subnetName` and `nsgIds`/`nsgNames`. **Only the ID forms
+are read when an instance is launched.** `cloud/scope/machine.go:320-341`
+consults `NetworkDetails.SubnetId` and `NetworkDetails.NSGIds`/`NSGId`, and when
+they are nil it branches on `IsControlPlane()` into role-based selection:
 
-The names are the ones declared in `OCICluster.spec.networkSpec.vcn.subnets[].name`
-and `...networkSecurityGroup.nsgs[].name`, which the user writes. So a machine
-manifest can be authored up front and needs no edit after the VCN exists.
+| path | subnet by name? | NSG by name? |
+| --- | --- | --- |
+| worker | yes — but reads the **top-level** `spec.subnetName` (`ocimachine_types.go:142`), not the `networkDetails` one (`machine.go:1075`) | yes, `networkDetails.nsgNames` (`machine.go:1091`) |
+| control-plane | **no** — first control-plane-role subnet, unconditionally (`machine.go:1043`) | **no** — all control-plane-role NSGs (`machine.go:1052`) |
+
+So `networkDetails.subnetName` is read by nothing, anywhere, and
+`spec.subnetName` is read only for workers. A manifest setting either is
+accepted by the webhook, stored, and silently ignored.
+
+**Requirement 4 is nevertheless met, for a weaker reason than it looks.** The
+manifests can still be authored up front and need no edit after the VCN exists,
+because role-based defaulting puts each machine where we wanted it anyway. That
+equivalence holds only while **each role has exactly one subnet and one NSG**.
+It breaks for a topology with two worker subnets, and it cannot be worked around
+for control-plane machines at all, since no selector reaches that branch.
+
+**Generalised, this is a `platform: external` requirement and not an OCI quirk.**
+A provider must let a machine's placement be expressed by something stable at
+manifest-authoring time. "A field exists for it" is not sufficient evidence that
+it does — requirement 4 was marked *Fine* here on a reading of the type
+definitions alone, and was wrong. Check the call site, not the struct.
+
+Recorded as an upstream fix candidate: `getGetControlPlaneMachineSubnet` and
+`getGetControlPlaneMachineNSGs` should honour a name the way their worker
+counterparts do, and the two `subnetName` fields should be reconciled.
 
 The one value that still cannot be written ahead of time is the same one as on
 AWS, and it is not a cloud identifier — it is

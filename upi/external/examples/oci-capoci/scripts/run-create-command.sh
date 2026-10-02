@@ -4,10 +4,17 @@
 # Drives a `platform: external` install on OCI with CAPOCI.
 #
 # ############################################################################
-# # STATUS: NEVER EXECUTED. Written 2026-09-30 with no OCI account available. #
-# # The aws-capa counterpart of this script was developed over a dozen runs;  #
-# # this one has made zero. Treat it as an executable description of the      #
-# # workflow rather than as working automation.                               #
+# # STATUS: EXECUTED, through to a complete cluster, over thirteen runs       #
+# # between 2026-09-30 and 2026-10-01. Every correction those runs produced   #
+# # is in this file and in external-install/.                                 #
+# #                                                                           #
+# # One caveat, and it is the important one: the run that produced a complete #
+# # cluster needed hand-work partway through -- see the Phase 4 table in      #
+# # ../README.md for exactly what and why. The fixes for all but one of those #
+# # items are in this file set, and no run has yet been spent proving the     #
+# # corrected set installs unattended. Treat an unattended run as untested.   #
+# # The one item that is NOT fixed is worker CSR approval, which has no       #
+# # machine-approver on `platform: external`.                                 #
 # ############################################################################
 #
 #
@@ -73,6 +80,15 @@ INSTALL_DIR=install-dir-${CLUSTER_NAME}
 : "${OCI_IGNITION_BUCKET:?set it to a private object storage bucket}"
 : "${OCI_CREDENTIALS_FILE:?set it to the OCIClusterIdentity Secret manifest}"
 
+# The oci CLI does not read OCI_REGION -- that is this project's variable. Left
+# to itself the CLI uses the home region from its config file, and every
+# command below then acts on the wrong region while looking like it worked:
+# `oci os bucket get` answers BucketNotFound for a bucket that plainly exists.
+# Found the first time this script was run for real, 2026-10-01. Make the one
+# variable authoritative, and export it so the hooks inherit it too -- they run
+# oci with no --region of their own.
+export OCI_CLI_REGION="${OCI_REGION}"
+
 # Checked separately so the failure says what is actually wrong. There is no
 # RHCOS image for OCI today and this variable has nothing to point at until
 # someone imports one.
@@ -113,15 +129,126 @@ cp -rvf external-install/ "${INSTALL_DIR}/external-install/"
 # IT NEVER REACHES THE INSTALLED CLUSTER. The installer applies
 # external-install/ to its TEMPORARY LOCAL control plane -- envtest etcd plus
 # kube-apiserver on this host -- which is torn down when the install finishes.
-# Nothing copies Secrets from there to the target. This matters because the
-# in-cluster OCI CCM and CSI use instance principals and need no API key at
-# all; see external-install/extra-manifests/README.md.
+# Nothing copies Secrets from there to the target.
+#
+# THAT USED TO BE THE WHOLE STORY AND IS NOT ANY MORE. With the pilot default
+# OCI_CCM_AUTH=api-key, the infraReady hook reads these same six fields and
+# renders them into a Secret for the in-cluster CCM and CSI driver, which IS
+# delivered to the target cluster. The intended end state is still instance
+# principals, which need no key in the cluster at all -- read the OCI_CCM_AUTH
+# block in external-install/hooks/infra-hook.sh for what that costs and why the
+# pilot does not do it yet.
 if [[ ! -s ${OCI_CREDENTIALS_FILE} ]]; then
 	echo "no OCIClusterIdentity Secret at ${OCI_CREDENTIALS_FILE}"
 	exit 1
 fi
 cp "${OCI_CREDENTIALS_FILE}" "${INSTALL_DIR}/external-install/00_oci-credentials.yaml"
 chmod 0600 "${INSTALL_DIR}/external-install/00_oci-credentials.yaml"
+
+# ---------------------------------------------------------------------------
+# Pre-provision identity check
+#
+# There is NO preProvision hook. The installer's external hook contract offers
+# infraReady, postProvision and preDestroy only
+# (pkg/infrastructure/external/hooks/hooks.go), and all three run after the
+# provider has started creating things. So anything that should stop a run
+# before it spends money has to live here, in the operator's own script.
+#
+# That is itself a finding about `platform: external` rather than a quirk of
+# this example: every partner will want to validate credentials and quota
+# before provisioning, and today every partner has to invent this step. See
+# ../docs/capi-requirements.md.
+#
+# Four questions, all read-only. None of them mutates IAM, and none of them
+# prints a credential.
+# ---------------------------------------------------------------------------
+
+# 1. Does the compartment exist, and is it usable? A deleted or deleting
+#    compartment accepts a `get` and rejects every create, which surfaces much
+#    later as an opaque reconcile failure on the first VCN.
+compartment_state=$(oci iam compartment get --compartment-id "${OCI_COMPARTMENT_ID}" \
+	--query 'data."lifecycle-state"' --raw-output 2>/dev/null || true)
+if [[ ${compartment_state} != "ACTIVE" ]]; then
+	echo "compartment ${OCI_COMPARTMENT_ID} is ${compartment_state:-unreachable}, not ACTIVE"
+	exit 1
+fi
+
+# 2. Is the Secret CAPOCI will use the same identity the CLI is using?
+#
+#    Worth checking because everything else in this script is validated through
+#    the CLI, and if the two diverge then every preflight below passes while the
+#    provider authenticates as somebody else entirely. The failure mode is a
+#    NotAuthorizedOrNotFound on the first create -- an error that reads like a
+#    missing policy and is actually a mismatched user.
+#
+#    Compared inside python so that no value is ever printed: the output is
+#    three booleans. The fields compared (user, tenancy, fingerprint) are OCIDs
+#    and a public key hash, not the key itself, but they are handled this way
+#    anyway because the file they come from also holds the private key.
+python3 - "${INSTALL_DIR}/external-install/00_oci-credentials.yaml" \
+	"${OCI_CLI_CONFIG_FILE:-${HOME}/.oci/config}" "${OCI_CLI_PROFILE:-DEFAULT}" <<'PY'
+import base64, configparser, sys, yaml
+
+secret_path, config_path, profile = sys.argv[1:4]
+
+fields = {}
+for doc in yaml.safe_load_all(open(secret_path)):
+    if not doc or doc.get("kind") != "Secret":
+        continue
+    fields.update(doc.get("stringData") or {})
+    fields.update({k: base64.b64decode(v).decode()
+                   for k, v in (doc.get("data") or {}).items()})
+
+cfg = configparser.ConfigParser()
+cfg.read(config_path)
+if profile not in cfg:
+    sys.exit("profile [%s] not found in %s" % (profile, config_path))
+
+bad = []
+for name in ("user", "tenancy", "fingerprint"):
+    same = (fields.get(name) or "").strip() == (cfg[profile].get(name) or "").strip()
+    print("  identity %-12s secret matches CLI profile: %s" % (name, same))
+    if not same:
+        bad.append(name)
+if bad:
+    sys.exit("the OCIClusterIdentity Secret and the OCI CLI profile disagree on: "
+             + ", ".join(bad) + ". Every check below would validate the wrong "
+             "identity. Reconcile them before running.")
+PY
+
+# 3. Can this identity read every service the install touches? These are the
+#    cheapest possible calls against each API the provider and the CCM use. A
+#    read grant does not prove a write grant, so this is a necessary-not-
+#    sufficient check -- it catches the common case, which is a compartment the
+#    user has no policy on at all.
+for probe in \
+	"network vcn list|virtual-network-family (CAPOCI builds the VCN)" \
+	"nlb network-load-balancer list|load-balancers (the API server endpoint)" \
+	"compute instance list|instance-family (machines)" \
+	"bv volume list|volume-family (the CSI driver)"; do
+	cmd=${probe%%|*}
+	what=${probe##*|}
+	# shellcheck disable=SC2086
+	if ! oci ${cmd} --compartment-id "${OCI_COMPARTMENT_ID}" --limit 1 >/dev/null 2>&1; then
+		echo "cannot list ${what} in ${OCI_COMPARTMENT_ID}"
+		echo "the identity above lacks a policy on this compartment; the install will fail"
+		exit 1
+	fi
+	echo "  can read ${what}"
+done
+
+# 4. Report, without failing, whether instance principals could be used. This
+#    is the thing the pilot is NOT doing, and the reason is a tenancy-admin
+#    action nobody can take from inside a script. Printing it here keeps the gap
+#    visible at run time instead of only in a comment: a dynamic group matching
+#    this compartment is the first of the four objects listed in
+#    external-install/hooks/infra-hook.sh, and if one appears, that is the
+#    signal to revisit OCI_CCM_AUTH.
+dyn_groups=$(oci iam dynamic-group list --all \
+	--query "length(data[?contains(\"matching-rule\", '${OCI_COMPARTMENT_ID}')])" \
+	--raw-output 2>/dev/null || echo 0)
+echo "  dynamic groups matching this compartment: ${dyn_groups:-0} (instance principals need >= 1)"
+echo "  OCI_CCM_AUTH=${OCI_CCM_AUTH:-api-key} -- the in-cluster CCM credential model"
 
 sed -i "s/^  name: CHANGE-ME$/  name: ${CLUSTER_NAME}/" "${INSTALL_DIR}/install-config.yaml"
 sed -i "s/^baseDomain: CHANGE-ME$/baseDomain: ${BASE_DOMAIN:?set it to the DNS zone}/" \
@@ -214,6 +341,21 @@ fi
 
 CLUSTER_DOMAIN="${CLUSTER_NAME}.${BASE_DOMAIN}"
 
+# An OCI VCN dnsLabel is not a domain name: alphanumeric only, must start with
+# a letter, 15 characters maximum. The infrastructure ID has hyphens and can
+# exceed that, so strip and truncate. Derived rather than fixed so two clusters
+# in one compartment do not collide -- OCI requires the label to be unique
+# there.
+VCN_DNS_LABEL=$(printf '%s' "${INFRA_ID}" | tr -cd '[:alnum:]' | cut -c1-15)
+
+# Starting with a digit is rejected, and nothing guarantees the infra ID does
+# not. Cheap to guard, and the failure it prevents only appears minutes later
+# as a VCN reconcile error.
+if [[ ! ${VCN_DNS_LABEL} =~ ^[a-zA-Z] ]]; then
+	VCN_DNS_LABEL="v${VCN_DNS_LABEL}"
+	VCN_DNS_LABEL=${VCN_DNS_LABEL:0:15}
+fi
+
 # Every token in external-install/, in one place. Machine network references
 # are subnetName/nsgNames selectors rather than OCIDs
 # (api/v1beta2/types.go), so nothing here needs a second pass after CAPOCI
@@ -223,16 +365,40 @@ sed -i \
 	-e "s|COMPARTMENT-OCID|${OCI_COMPARTMENT_ID}|g" \
 	-e "s|IMAGE-OCID|${OCI_IMAGE_ID}|g" \
 	-e "s/REGION/${OCI_REGION}/g" \
+	-e "s/VCNDNSLABEL/${VCN_DNS_LABEL}/g" \
 	-e "s/CLUSTERDNS/${CLUSTER_DOMAIN}/g" \
 	"${INSTALL_DIR}/external-install/cluster.yaml" \
 	"${INSTALL_DIR}/external-install/00_oci-credentials.yaml" \
 	"${INSTALL_DIR}"/external-install/machines/*.yaml
 
-if grep -rqE 'CLUSTER-ID|COMPARTMENT-OCID|IMAGE-OCID|CLUSTERDNS' \
-	"${INSTALL_DIR}/external-install/"; then
+# Scoped to the files the sed above actually rewrites, and the scoping is the
+# whole point. "Checking files that are not inputs to the substitution cannot
+# detect a real drift, only invent one" -- that was already the comment here,
+# and the check still walked the whole directory, so it went on inventing them.
+#
+# It cost two runs. First it failed on machines/README.md, which documents the
+# placeholders by name; the --include filters above were added and the walk was
+# left alone, which fixed that instance and not the bug. Then on 2026-10-01 it
+# failed again, on extra-manifests/99_external-01-oci-hostname-master.yaml --
+# a manifest that is not a substitution input, over the token appearing inside
+# an explanatory COMMENT. The comment was reworded; the walk is now also
+# narrowed to the exact file list, so the next legitimate mention of a
+# placeholder does not stop an install.
+#
+# Keep this list and the sed's file list identical. They are two statements of
+# the same fact and they drift silently.
+SUBST_INPUTS=(
+	"${INSTALL_DIR}/external-install/cluster.yaml"
+	"${INSTALL_DIR}/external-install/00_oci-credentials.yaml"
+	"${INSTALL_DIR}"/external-install/machines/*.yaml
+)
+if grep -qE \
+	'CLUSTER-ID|COMPARTMENT-OCID|IMAGE-OCID|CLUSTERDNS|VCNDNSLABEL' \
+	"${SUBST_INPUTS[@]}"; then
 	echo "placeholders survived substitution under ${INSTALL_DIR}/external-install/"
-	grep -rlE 'CLUSTER-ID|COMPARTMENT-OCID|IMAGE-OCID|CLUSTERDNS' \
-		"${INSTALL_DIR}/external-install/"
+	grep -lE \
+		'CLUSTER-ID|COMPARTMENT-OCID|IMAGE-OCID|CLUSTERDNS|VCNDNSLABEL' \
+		"${SUBST_INPUTS[@]}"
 	exit 1
 fi
 

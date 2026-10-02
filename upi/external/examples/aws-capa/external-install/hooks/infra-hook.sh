@@ -55,11 +55,15 @@
 #   OPENSHIFT_INSTALL_MANIFEST_DIR    <install dir>/external-install
 #   OPENSHIFT_INSTALL_STATE_DIR       writable; what is recorded here on
 #                                     infra-ready is what pre-destroy reads
-#   OPENSHIFT_INSTALL_CLUSTER_JSON    the core CAPI Cluster object, as JSON
-#   OPENSHIFT_INSTALL_INFRA_JSON      the provider's infrastructure object, as
-#                                     JSON, verbatim from the local control
-#                                     plane -- unset if there is not exactly
-#                                     one
+#   OPENSHIFT_INSTALL_CLUSTER_JSON    PATH of a file holding the core CAPI
+#                                     Cluster object as JSON
+#   OPENSHIFT_INSTALL_INFRA_JSON      PATH of a file holding the provider's
+#                                     infrastructure object as JSON, verbatim
+#                                     from the local control plane -- unset if
+#                                     there is not exactly one. A path, not
+#                                     the document: the reads below pass it to
+#                                     jq as a FILE argument, which is the only
+#                                     correct form.
 #   OPENSHIFT_INSTALL_KUBECONFIG      the installed cluster's admin
 #                                     kubeconfig. Set for every hook and
 #                                     usable by none until the cluster's API

@@ -68,9 +68,25 @@ Every hook gets the same set:
 | `OPENSHIFT_INSTALL_DIR` | the install directory |
 | `OPENSHIFT_INSTALL_MANIFEST_DIR` | `<install dir>/external-install` |
 | `OPENSHIFT_INSTALL_STATE_DIR` | writable; what `infra-ready` records here is what `pre-destroy` reads |
-| `OPENSHIFT_INSTALL_CLUSTER_JSON` | the core CAPI `Cluster` object, as JSON |
-| `OPENSHIFT_INSTALL_INFRA_JSON` | the provider's infrastructure object, as JSON, verbatim from the local control plane — **unset if there is not exactly one** |
+| `OPENSHIFT_INSTALL_CLUSTER_JSON` | **path** of a file holding the core CAPI `Cluster` object as JSON |
+| `OPENSHIFT_INSTALL_INFRA_JSON` | **path** of a file holding the provider's infrastructure object as JSON, verbatim from the local control plane — **unset if there is not exactly one** |
 | `OPENSHIFT_INSTALL_KUBECONFIG` | the installed cluster's admin kubeconfig |
+
+**The two `_JSON` variables carry a path, not a document.** The installer writes each object
+to a file in a per-hook temporary directory and exports that file's path
+(`pkg/infrastructure/external/hooks/hooks.go:200-216`). Read them as files:
+
+```sh
+jq -r '.spec.compartmentId' "${OPENSHIFT_INSTALL_INFRA_JSON}"
+```
+
+Piping the variable's own *value* into `jq` hands it a pathname and fails with
+`jq: parse error: Invalid numeric literal at EOF at line 1, column <len+1>`. That is not a
+hypothetical: this table previously read "the object, as JSON", and the `oci-capoci` hook was
+written from it and did exactly that — the error surfaced as a missing `.spec.compartmentId`
+rather than as a misread variable, which cost a cloud run to diagnose. The temporary
+directory is removed when the hook returns, so copy anything that must outlive it into
+`OPENSHIFT_INSTALL_STATE_DIR`.
 
 Two deserve comment.
 

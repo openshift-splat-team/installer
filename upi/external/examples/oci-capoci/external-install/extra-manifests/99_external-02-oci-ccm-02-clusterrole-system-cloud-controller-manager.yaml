@@ -1,0 +1,167 @@
+# yamllint disable rule:indentation rule:brackets
+#
+# COPIED, NOT WRITTEN -- object 3 of 5 from Oracle's bundle.
+#
+#   source  oci-openshift/custom_manifests/oci-ccm-csi-drivers/v1.34.0/01-oci-ccm.yml
+#   sha256  8a585cef8cb2d34834b30784cab277ca5fc80caa0bbc40e720516ae466a1fdc3
+#   object  ClusterRole/system:cloud-controller-manager
+#
+# One object per file because the bootstrap node applies this directory one
+# object per file and silently drops the rest of a multi-document one; the
+# installer refuses such a file outright. See oci-ccm-csi-bundle.md in this
+# directory for the full account: why these are day-0 while their config
+# Secrets are not, what the two deltas against upstream are, and the
+# partner-manifest supply-chain gap this bundle exposes.
+#
+# The yamllint disable is cosmetic only -- Oracle indents sequences and writes
+# `[ "x" ]`, both of which this repository's .yamllint rejects. Reformatting a
+# vendored file was tried and broke it; see oci-ccm-csi-bundle.md.
+#
+---
+# oci-ccm-02-cluster-role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:cloud-controller-manager
+  labels:
+    kubernetes.io/cluster-service: "true"
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - '*'
+
+- apiGroups:
+  - ""
+  resources:
+  - nodes/status
+  verbs:
+  - patch
+
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - list
+  - watch
+  - patch
+  - get
+
+- apiGroups:
+  - ""
+  resources:
+  - services/status
+  verbs:
+  - patch
+  - get
+  - update
+
+- apiGroups:
+    - ""
+  resources:
+    - configmaps
+  resourceNames:
+    - "extension-apiserver-authentication"
+  verbs:
+    - get
+
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - list
+  - watch
+  - create
+  - patch
+  - update
+
+# For leader election
+- apiGroups:
+  - ""
+  resources:
+  - endpoints
+  verbs:
+  - create
+
+- apiGroups:
+  - ""
+  resources:
+  - endpoints
+  resourceNames:
+  - "cloud-controller-manager"
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+
+- apiGroups:
+    - "coordination.k8s.io"
+  resources:
+    - leases
+  verbs:
+    - get
+    - create
+    - update
+    - delete
+    - patch
+    - watch
+
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  resourceNames:
+  - "cloud-controller-manager"
+  verbs:
+  - get
+  - update
+
+- apiGroups:
+    - ""
+  resources:
+    - configmaps
+  resourceNames:
+    - "extension-apiserver-authentication"
+  verbs:
+    - get
+    - list
+    - watch
+
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - create
+  - list
+  - get
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+
+# For the PVL
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumes
+  verbs:
+  - list
+  - watch
+  - patch

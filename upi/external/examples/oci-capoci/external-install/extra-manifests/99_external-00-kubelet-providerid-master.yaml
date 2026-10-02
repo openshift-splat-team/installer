@@ -1,11 +1,16 @@
 # Give every node a cloud provider ID, so the OCI cloud controller manager can
 # identify it.
 #
-# STATUS: NEVER RUN. Adapted from Oracle's own
+# Adapted from Oracle's own
 # oci-openshift/custom_manifests/butane/oci-kubelet-providerid-master.bu, which
 # IS in production use -- but there it is applied by Agent-based installation,
 # not by this path, and the script below is hardened relative to Oracle's. See
 # README.md.
+#
+# STATUS: has run. Rendered by the bootstrap machine-config server and applied
+# by every master on first boot during the 2026-10-01 run. The earlier "STATUS:
+# NEVER RUN" banner here is removed rather than amended because it is now
+# simply false.
 #
 # This is half of what `platform: external` needs before a node can go Ready;
 # the other half is the CCM itself, and on OCI the CCM's CONFIG cannot be a
@@ -17,11 +22,27 @@
 # api-int:22623/config/master. Machines fetch that on first boot, so the unit
 # below runs before their kubelet ever registers.
 #
-# WHAT ORACLE SHIPS THAT THIS DOES NOT: an oci-hostname-update.service that
-# sets /etc/hostname from the instance's displayName. Left out deliberately to
-# keep this example to one concern, and flagged in README.md as something to
-# evaluate -- if node names and OCI display names disagree, some CCM lookups
-# that fall back to name matching will not find the instance.
+# CORRECTION, AFTER A RUN. This block used to say that Oracle's
+# oci-hostname-update.service was "left out deliberately to keep this example
+# to one concern", and that the consequence was merely that "some CCM lookups
+# that fall back to name matching will not find the instance". Both halves were
+# wrong, and the superseded text is quoted here rather than deleted.
+#
+# MEASURED: with no hostname unit, every machine registers as
+# "localhost.localdomain" --
+#
+#     NAME                    STATUS     ROLES                  AGE   VERSION
+#     localhost.localdomain   NotReady   control-plane,master   88s   v1.36.3
+#
+# -- so three masters contend for ONE Node object and the control plane never
+# forms. It is not a name-matching nicety; it is a hard blocker, and it was the
+# second of the two reasons the 2026-10-01 run produced no cluster.
+#
+# The fix is a separate manifest, 99_external-01-oci-hostname-{master,worker}
+# .yaml, hardened relative to Oracle's unit in three ways it documents inline.
+# It is separate for the same "one concern" reason given above -- that part of
+# the judgement still holds. What did not hold is treating the concern as
+# optional.
 ---
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig

@@ -1,0 +1,66 @@
+# yamllint disable rule:indentation rule:brackets
+#
+# COPIED, NOT WRITTEN -- object 6 of 13 from Oracle's bundle.
+#
+#   source  oci-openshift/custom_manifests/oci-ccm-csi-drivers/v1.34.0/01-oci-csi.yml
+#   sha256  f3af5c329e11a2272836856d29f3cc6f0af852ec0e84c79850b3c6538a858803
+#   object  ConfigMap/oci-fss-csi
+#
+# One object per file because the bootstrap node applies this directory one
+# object per file and silently drops the rest of a multi-document one; the
+# installer refuses such a file outright. See oci-ccm-csi-bundle.md in this
+# directory for the full account: why these are day-0 while their config
+# Secrets are not, what the two deltas against upstream are, and the
+# partner-manifest supply-chain gap this bundle exposes.
+#
+# The yamllint disable is cosmetic only -- Oracle indents sequences and writes
+# `[ "x" ]`, both of which this repository's .yamllint rejects. Reformatting a
+# vendored file was tried and broke it; see oci-ccm-csi-bundle.md.
+#
+---
+# oci-csi-06-fss-csi.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oci-fss-csi
+  namespace: oci-csi
+data:
+  mount: |-
+    #!/bin/sh
+    if [ -x /sbin/mount ]; then
+    chroot /host mount "$@"
+    elif [ -x /usr/local/sbin/mount ]; then
+    chroot /host mount "$@"
+    elif [ -x /usr/sbin/mount ]; then
+    chroot /host mount "$@"
+    elif [ -x /usr/local/bin/mount ]; then
+    chroot /host mount "$@"
+    else
+    chroot /host mount "$@"
+    fi
+  umount: |-
+    #!/bin/sh
+    if [ -x /sbin/umount ]; then
+    chroot /host umount "$@"
+    elif [ -x /usr/local/sbin/umount ]; then
+    chroot /host umount "$@"
+    elif [ -x /usr/sbin/umount ]; then
+    chroot /host umount "$@"
+    elif [ -x /usr/local/bin/umount ]; then
+    chroot /host umount "$@"
+    else
+    chroot /host umount "$@"
+    fi
+  umount.oci-fss: |-
+    #!/bin/sh
+    if [ -x /sbin/umount-oci-fss ]; then
+    chroot /host umount.oci-fss "$@"
+    elif [ -x /usr/local/sbin/umount-oci-fss ]; then
+    chroot /host umount.oci-fss "$@"
+    elif [ -x /usr/sbin/umount-oci-fss ]; then
+    chroot /host umount.oci-fss "$@"
+    elif [ -x /usr/local/bin/umount-oci-fss ]; then
+    chroot /host umount.oci-fss "$@"
+    else
+    chroot /host umount.oci-fss "$@"
+    fi

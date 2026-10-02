@@ -1,8 +1,10 @@
 # Machine manifests — the three-phase workflow
 
-**Status: never run.** Written 2026-09-30 against `cluster-api-provider-oci`
-with no OCI account available. The aws-capa equivalent of this directory was
-developed over a dozen installs; this one has executed zero.
+**Status: has run.** Written 2026-09-30 against `cluster-api-provider-oci`
+with no OCI account available; corrected through 2026-10-01 over thirteen
+runs, the last of which produced a complete cluster — five Ready nodes, 34/34
+cluster operators Available. Every "Before the first run" item below has now
+been hit at least once, and each is annotated with what actually happened.
 
 ## Why this directory exists at all
 
@@ -40,11 +42,28 @@ appends a five-character random suffix at `create manifests` time, and the
 `Cluster` object's name must match it or the `Machine` objects' `clusterName`
 will not resolve.
 
-There is deliberately **no token for a subnet or NSG OCID**. `OCIMachine`'s
-`networkDetails` accepts `subnetName` and `nsgNames` alongside `subnetId` and
-`nsgIds` (`api/v1beta2/types.go`), so machines reference the network CAPOCI
-builds by name. Nothing in this directory needs rewriting after the network
-exists — which is why there is no fourth phase.
+There is deliberately **no token for a subnet or NSG OCID**, and nothing in
+this directory needs rewriting after the network exists — which is why there is
+no fourth phase. But the reason is not the one the schema suggests.
+
+> **Correction, after a run destroyed a machine.** An earlier version of this
+> paragraph said `OCIMachine.networkDetails` accepts `subnetName` and
+> `nsgNames` alongside `subnetId` and `nsgIds`, so machines reference the
+> network by name. The fields exist; **CAPOCI does not read them on the launch
+> path.** Placement is decided by `IsControlPlane()` and the resource's *role*,
+> and only the worker branch honours a name — and even then it reads the
+> top-level `spec.subnetName`, not the `networkDetails` one.
+>
+> | path | subnet by name? | NSG by name? |
+> | --- | --- | --- |
+> | worker | yes, `spec.subnetName` (`machine.go:1075`) | yes, `nsgNames` (`machine.go:1091`) |
+> | control-plane | **no** (`machine.go:1043`) | **no** (`machine.go:1052`) |
+>
+> So the OCIDs are genuinely not needed, but because **role-based defaulting
+> lands on the right subnet by itself**, not because the names steer anything.
+> This holds only while each role has exactly one subnet. A topology with two
+> worker subnets cannot be expressed for control-plane machines at all.
+> `10_bootstrap.yaml` carries the full account and the error it produced.
 
 ## The three phases
 
@@ -117,27 +136,68 @@ teardown in the same change. For this directory:
 | --- | --- |
 | the OCI instances | CAPOCI, on `Cluster` deletion — `destroy cluster` |
 | the bootstrap ignition object and its pre-authenticated request | `../hooks/infra-hook.sh`, `pre-destroy` |
+| the DNS records the hooks publish, and the ingress load balancer the CCM built | `../hooks/infra-hook.sh`, `pre-destroy` |
 | the object storage bucket | **not** removed — reused across runs, created once |
 
 The bucket is deliberately long-lived and deliberately private. Only the object
 and the pre-authenticated request over it are per-cluster.
 
-## Before the first run
+The ingress load balancer is in that table because `destroy cluster` does not
+delete the `Service` that caused it, so the CCM never tears it down. It is
+removed **by OCID recorded at post-provision**, which is not a stylistic
+choice: the CCM tags its load balancer with nothing at all (`freeform-tags:
+{}`, measured), and a name-contains sweep on the infra ID would match
+`<infra-id>-apiserver` — CAPOCI's API load balancer — while never matching the
+ingress one. See `../extra-manifests/99_external-04-ingress-nlb.yaml`.
 
-In rough order of how likely each is to stop the install:
+## What each "before the first run" item turned out to be
 
-1. **No RHCOS image for OCI is published, so one must be built.** `IMAGE-OCID`
-   has nothing to point at until it is. The capability is there — the RHCOS in
-   the release payload ships Ignition 2.26.0 with the `oraclecloud` provider
-   compiled in, measured 2026-10-01 — so the work is importing the published
-   `qemu` QCOW2 with `ignition.platform.id=oraclecloud` written into it.
-   `../../docs/boot-image.md` has the measurement, the artifact URL and what
-   is still unproven.
-2. **22623 has no listener until the hook adds one.** `../cluster.yaml`
-   explains why CAPOCI cannot express it and why an out-of-band listener
-   survives reconcile; `../../docs/capi-requirements.md` §8 has the open
-   question about populating its backends in time for the masters' first boot.
-3. **Worker CSRs need manual approval.** See the header of `30_worker.yaml`.
-4. **The subnet CIDRs here are wider than CAPOCI's defaults.** The default
-   control-plane subnet is a `/29` — five usable addresses for three masters
-   plus bootstrap. `../cluster.yaml` widens it and says so.
+Kept in the original order, with the outcome of thirteen runs against each.
+
+1. **The boot image. Still the largest unresolved item, and the pilot's one
+   real workaround.** No RHCOS image for OCI is published. The pilot boots the
+   **OpenStack** QCOW2 with `ignition.platform.id=openstack`, imported as a
+   custom image. It works, and it is not acceptable as a product answer:
+   - it makes OCI consume another platform's artifact, which no partner can be
+     asked to do and which no release process guarantees will keep working;
+   - afterburn then queries an OpenStack metadata API that OCI does not serve,
+     so **the node hostname is never set** — every node registers as
+     `localhost.localdomain` and three masters contend for one `Node` object.
+     That is the whole reason
+     `../extra-manifests/99_external-01-oci-hostname-{master,worker}.yaml`
+     exist.
+
+   The underlying blocker is IMDSv2: OCI serves only v2, and the generic path
+   needs OpenShift components that can speak it. The enhancement proposal
+   carries this as a product requirement rather than an example-level fix,
+   because the answer has to be **generic, multi-tenant images supported by the
+   cloud provider** — not a per-customer image and not a per-provider
+   exception. `OPENSHIFT_INSTALL_RHCOS_ARTIFACTS_JSON` is the shape the
+   override should take. `../../docs/boot-image.md` has the measurements.
+
+2. **22623 has no listener until the hook adds one — confirmed, and the hook
+   handles it.** The out-of-band listener survives CAPOCI reconcile as
+   predicted. The backends are populated in time; the masters' first boot
+   reaches the machine config server. `../cluster.yaml` explains why CAPOCI
+   cannot express it.
+
+3. **Worker CSRs need manual approval — confirmed.** Four CSRs were approved by
+   hand on run 13 before the workers went Ready. This is the same behaviour as
+   every other provider without the machine-approver's cloud-specific checks,
+   and it is deliberately **not** automated here: a webhook that compares a CSR
+   against the instance it claims to come from is the right fix and is a
+   separate piece of work. For now, approve them by hand:
+
+   ```sh
+   oc get csr -o name | xargs -r oc adm certificate approve
+   ```
+
+4. **The subnet CIDRs here are wider than CAPOCI's defaults — confirmed
+   necessary.** The default control-plane subnet is a `/29`: five usable
+   addresses for three masters plus bootstrap. `../cluster.yaml` widens it.
+
+5. **New, found by running it: the node NSGs need 80 and 443 from inside the
+   VCN.** Not a machine-manifest concern, but it stops the cluster at 29/34
+   operators with every node Ready, so it belongs on this list.
+   `../extra-manifests/99_external-04-ingress-nlb.yaml` has the mechanism and
+   the measurement.

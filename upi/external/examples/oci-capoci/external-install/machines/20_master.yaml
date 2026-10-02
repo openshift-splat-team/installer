@@ -72,11 +72,16 @@ spec:
     memoryInGBs: "16"
   bootVolumeSizeInGBs: "120"
   networkDetails:
+    # DECORATIVE. CAPOCI never reads this field on the launch path -- see the
+    # long comment in 10_bootstrap.yaml, where ignoring it destroyed a machine.
+    # It is kept because it states the intent, and because the intent happens
+    # to be what CAPOCI does anyway: a control-plane-labelled machine is placed
+    # in the first control-plane-role subnet (cloud/scope/machine.go:1043),
+    # which is this one. Correct by coincidence, not by instruction.
     subnetName: CLUSTER-ID-subnet-control-plane
     assignPublicIp: false
   freeformTags:
     openshift-cluster-id: CLUSTER-ID
-    kubernetes.io/cluster/CLUSTER-ID: owned
     openshift-machine-role: master
   metadata: {}
 ---
@@ -112,11 +117,16 @@ spec:
     memoryInGBs: "16"
   bootVolumeSizeInGBs: "120"
   networkDetails:
+    # DECORATIVE. CAPOCI never reads this field on the launch path -- see the
+    # long comment in 10_bootstrap.yaml, where ignoring it destroyed a machine.
+    # It is kept because it states the intent, and because the intent happens
+    # to be what CAPOCI does anyway: a control-plane-labelled machine is placed
+    # in the first control-plane-role subnet (cloud/scope/machine.go:1043),
+    # which is this one. Correct by coincidence, not by instruction.
     subnetName: CLUSTER-ID-subnet-control-plane
     assignPublicIp: false
   freeformTags:
     openshift-cluster-id: CLUSTER-ID
-    kubernetes.io/cluster/CLUSTER-ID: owned
     openshift-machine-role: master
   metadata: {}
 ---
@@ -152,10 +162,15 @@ spec:
     memoryInGBs: "16"
   bootVolumeSizeInGBs: "120"
   networkDetails:
+    # DECORATIVE. CAPOCI never reads this field on the launch path -- see the
+    # long comment in 10_bootstrap.yaml, where ignoring it destroyed a machine.
+    # It is kept because it states the intent, and because the intent happens
+    # to be what CAPOCI does anyway: a control-plane-labelled machine is placed
+    # in the first control-plane-role subnet (cloud/scope/machine.go:1043),
+    # which is this one. Correct by coincidence, not by instruction.
     subnetName: CLUSTER-ID-subnet-control-plane
     assignPublicIp: false
   freeformTags:
     openshift-cluster-id: CLUSTER-ID
-    kubernetes.io/cluster/CLUSTER-ID: owned
     openshift-machine-role: master
   metadata: {}

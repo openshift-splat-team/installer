@@ -64,19 +64,75 @@ spec:
     ocpus: "4"
     memoryInGBs: "16"
   bootVolumeSizeInGBs: "120"
-  # Public, because the bootstrap machine must be reachable for log gathering
-  # and because it needs egress to pull the release payload. The masters do
-  # not. Mirrors the aws-capa example, where only the bootstrap has publicIP.
+  # PRIVATE, and not by choice -- CAPOCI gives a control-plane machine no way
+  # to be anywhere else. This is the opposite of the aws-capa example, where
+  # the bootstrap is the one machine with a public IP.
+  #
+  # MEASURED, not read. This block first said
+  #
+  #     subnetName: CLUSTER-ID-subnet-cp-endpoint
+  #     assignPublicIp: true
+  #
+  # and the launch failed, leaving the instance TERMINATED and the install with
+  # no bootstrap:
+  #
+  #     400 InvalidParameter: Public IP addresses are prohibited in this subnet
+  #     CreateVnic operation in VcnInternalService
+  #
+  # The subnet in that error was NOT the one named above. It was
+  # CLUSTER-ID-subnet-control-plane (10.0.0.32/27, prohibitPublicIpOnVnic
+  # true), because CAPOCI never read the name.
+  #
+  # WHY, AND IT IS A REAL CAPOCI DEFECT RATHER THAN A MISREADING OF THE SCHEMA.
+  # The launch path (cloud/scope/machine.go:320-341) consults only the OCID
+  # forms -- networkDetails.subnetId and networkDetails.nsgIds/nsgId -- and
+  # when they are nil it falls through to role-based selection keyed on
+  # IsControlPlane(), which is true for any Machine carrying the
+  # cluster.x-k8s.io/control-plane label (machine.go:1031-1034). The two
+  # branches are not symmetric:
+  #
+  #   path            subnet by name?                NSG by name?
+  #   worker          yes, spec.subnetName   :1075   yes, nsgNames   :1091
+  #   control-plane   NO                     :1043   NO              :1052
+  #
+  # getGetControlPlaneMachineSubnet returns the first subnet with the
+  # control-plane role, unconditionally. There is no name check to fail -- the
+  # field is simply never read on this path.
+  #
+  # Worse, there are TWO subnetName fields and neither one works here.
+  # networkDetails.subnetName (api/v1beta2/types.go:48) is the one that looks
+  # natural and is read by nothing on the launch path at all; the top-level
+  # spec.subnetName (api/v1beta2/ocimachine_types.go:142) is read, but only by
+  # getWorkerMachineSubnet. So the manifest above was accepted by the webhook,
+  # stored, and silently ignored -- the failure mode a schema field should
+  # never have.
+  #
+  # Recorded as an upstream fix candidate alongside the 25-rule batching gap in
+  # ../cluster.yaml: getGetControlPlaneMachineSubnet and
+  # getGetControlPlaneMachineNSGs should honour a name the way their worker
+  # counterparts already do.
+  #
+  # WHAT WE GIVE UP, STATED PLAINLY. No public IP means `openshift-install
+  # gather bootstrap` cannot SSH in, and that is the command you reach for
+  # precisely when a bootstrap has failed. Use an OCI instance console
+  # connection instead (oci compute instance-console-connection create), which
+  # works without a public address. The alternative -- dropping the
+  # control-plane label so the worker path applies and a name is honoured --
+  # was rejected: it would place the bootstrap in the public cp-endpoint subnet
+  # and require a second cp-endpoint NSG egress rule to reach it, for a machine
+  # that genuinely is part of the control plane.
+  #
+  # WHAT WE DO NOT GIVE UP. The bootstrap still has everything it needs:
+  #   - egress to pull the release payload, through the NAT gateway on the
+  #     control-plane subnet's route table;
+  #   - reachability from the masters on 6443 and 22623, via the NLB's private
+  #     address, which the control-plane NSG permits from the whole VCN;
+  #   - the control-plane NSG, which the role-based selection attaches for the
+  #     same reason it chose this subnet -- here the default is what we wanted.
   networkDetails:
-    # By NAME, not by OCID. This is what makes the manifest writable before the
-    # infrastructure exists -- the same property the AWS example gets from
-    # subnet.filters. The string must match a subnet declared in
-    # ../cluster.yaml.
-    subnetName: CLUSTER-ID-subnet-cp-endpoint
-    assignPublicIp: true
+    assignPublicIp: false
   freeformTags:
     openshift-cluster-id: CLUSTER-ID
-    kubernetes.io/cluster/CLUSTER-ID: owned
     # Read by hooks/infra-hook.sh at postProvision to find the instances that
     # must become backends of the 22623 listener.
     openshift-machine-role: bootstrap

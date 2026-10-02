@@ -101,11 +101,20 @@ spec:
     memoryInGBs: "16"
   bootVolumeSizeInGBs: "120"
   networkDetails:
+    # DECORATIVE, for a subtler reason than on the masters. The worker path
+    # DOES honour a subnet name -- but it reads the TOP-LEVEL
+    # OCIMachine.spec.subnetName (api/v1beta2/ocimachine_types.go:142), not
+    # this one (api/v1beta2/types.go:48). Two fields, same name, different
+    # structs, and only the other one works. See 10_bootstrap.yaml.
+    #
+    # Harmless here: with no name to match, getWorkerMachineSubnet
+    # (cloud/scope/machine.go:1075) returns the first worker-role subnet, which
+    # is this one. Moving it to the top level would make it load-bearing; it is
+    # left here so all three machine manifests read the same way.
     subnetName: CLUSTER-ID-subnet-worker
     assignPublicIp: false
   freeformTags:
     openshift-cluster-id: CLUSTER-ID
-    kubernetes.io/cluster/CLUSTER-ID: owned
     openshift-machine-role: worker
   metadata: {}
 ---
@@ -137,10 +146,19 @@ spec:
     memoryInGBs: "16"
   bootVolumeSizeInGBs: "120"
   networkDetails:
+    # DECORATIVE, for a subtler reason than on the masters. The worker path
+    # DOES honour a subnet name -- but it reads the TOP-LEVEL
+    # OCIMachine.spec.subnetName (api/v1beta2/ocimachine_types.go:142), not
+    # this one (api/v1beta2/types.go:48). Two fields, same name, different
+    # structs, and only the other one works. See 10_bootstrap.yaml.
+    #
+    # Harmless here: with no name to match, getWorkerMachineSubnet
+    # (cloud/scope/machine.go:1075) returns the first worker-role subnet, which
+    # is this one. Moving it to the top level would make it load-bearing; it is
+    # left here so all three machine manifests read the same way.
     subnetName: CLUSTER-ID-subnet-worker
     assignPublicIp: false
   freeformTags:
     openshift-cluster-id: CLUSTER-ID
-    kubernetes.io/cluster/CLUSTER-ID: owned
     openshift-machine-role: worker
   metadata: {}

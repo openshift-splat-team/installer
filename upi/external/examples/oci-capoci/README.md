@@ -427,7 +427,7 @@ In the order a reader is most likely to care:
    this problem; nothing here is OCI-specific.
 6. **`additionalListeners` upstream in CAPOCI**, matching CAPA, so the 22623
    listener stops being an out-of-band edit.
-7. **Report `ghcr.io/nikhisin3001`** to `oracle/oci-openshift`: upstream
+7. **Report `ghcr.io/nikhisin3001`** to `oracle-quickstart/oci-openshift`: upstream
    v1.34.0 ships its CCM image from an individual's personal namespace, and
    the digest differs from `ghcr.io/oracle/cloud-provider-oci:v1.34.0`. That
    is a substitution, not a rename.

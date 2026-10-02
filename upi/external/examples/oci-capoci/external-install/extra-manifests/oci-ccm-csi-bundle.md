@@ -1,18 +1,46 @@
 # Oracle's CCM and CSI bundles, as `platform: external` extra manifests
 
 The eighteen `99_external-02-oci-ccm-*` and `99_external-03-oci-csi-*` files are
-a **mechanical copy** of
+a **mechanical copy**, split one object per file, with **two deltas** and
+nothing else.
 
-```
-oci-openshift/custom_manifests/oci-ccm-csi-drivers/v1.34.0/01-oci-ccm.yml
-oci-openshift/custom_manifests/oci-ccm-csi-drivers/v1.34.0/01-oci-csi.yml
+## Upstream, and how to check this copy against it
+
+| | |
+| --- | --- |
+| Repository | <https://github.com/oracle-quickstart/oci-openshift> |
+| Commit | `4944984e3895198405b512f610fe665a9976db28` |
+| Ref | tag `v1.6.1`, committed 2026-08-12 |
+| Directory | `custom_manifests/oci-ccm-csi-drivers/v1.34.0/` |
+
+| Source file | SHA-256 | Objects |
+| --- | --- | --- |
+| `01-oci-ccm.yml` | `8a585cef8cb2d34834b30784cab277ca5fc80caa0bbc40e720516ae466a1fdc3` | 5 |
+| `01-oci-csi.yml` | `f3af5c329e11a2272836856d29f3cc6f0af852ec0e84c79850b3c6538a858803` | 13 |
+
+It is `oracle-quickstart/oci-openshift`, **not** `oracle/oci-openshift`; the
+latter does not exist and earlier revisions of these notes named it.
+
+A permalink to the exact bytes is the repository URL, then `/blob/`, then the
+commit, then the directory and file — for example
+`…/blob/4944984e3895198405b512f610fe665a9976db28/custom_manifests/oci-ccm-csi-drivers/v1.34.0/01-oci-ccm.yml`.
+
+To check for upstream drift:
+
+```sh
+git -C oci-openshift fetch origin
+git -C oci-openshift show \
+  origin/main:custom_manifests/oci-ccm-csi-drivers/v1.34.0/01-oci-ccm.yml | sha256sum
 ```
 
-split one object per file, with **two deltas** and nothing else. Each file's
-header records the source, its SHA-256 and which object it holds. They are
-produced by `tools/oci-capoci/gen-ccm-csi.py` at the workspace root — do not
-hand-edit them, re-run the generator, which proves the split is lossless by
-parsing every object before and after and requiring equality.
+If the hash differs from the table above, upstream has moved. Re-run the
+generator against the new checkout rather than merging by hand: the headers
+carry these same three facts per file, so a hand edit makes every recorded
+SHA-256 a lie and destroys the only property that makes this copy auditable.
+
+The files are produced by `tools/oci-capoci/gen-ccm-csi.py` at the workspace
+root, which proves the split is lossless by parsing every object before and
+after and requiring equality. **Do not hand-edit them.**
 
 ## Why one object per file
 
@@ -85,7 +113,7 @@ We substitute the Oracle-namespaced tag. Verified 2026-10-01 that it exists:
 not established that the two are functionally equivalent. Preferring the vendor
 namespace over an individual account is a supply-chain judgement, taken
 deliberately; it is not a verified no-op. Worth reporting upstream to
-`oracle/oci-openshift`.
+`oracle-quickstart/oci-openshift`.
 
 Run 13 completed its control plane on the Oracle-namespaced image, so the
 substitution is no longer merely plausible — it works.

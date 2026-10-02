@@ -1,3 +1,17 @@
+# yamllint disable rule:document-start
+#
+# The disable covers the `---` SEPARATORS below, not a document-start marker:
+# this file holds several objects and the separators are structural. This
+# repository's .yamllint sets `document-start: present: false`, a rule written
+# for single-document files -- yamllint reports every `---` under it and
+# cannot tell a separator from a leading marker. The leading marker this file
+# used to carry has been removed; what is left cannot be.
+#
+# Why several objects in one file rather than one each, which is what
+# extra-manifests/ requires: this directory is NOT applied by the bootstrap
+# node. It is read by the installer's local Cluster API control plane, which
+# decodes multi-document YAML correctly (ObjectsFromManifest). The two
+# directories have genuinely different contracts.
 # Cluster API manifests for a `platform: external` install driven by CAPA.
 #
 # These are USER-SUPPLIED. The installer generates nothing for this platform:
@@ -11,7 +25,7 @@
 # the External path is exercised against realistic infrastructure rather than a
 # toy VPC. Two deliberate departures from that sample are marked below.
 #
-# `run-create-command.sh` rewrites `mrb-ext0` to the run's INFRASTRUCTURE ID --
+# `run-create-command.sh` rewrites `CLUSTER_ID` to the run's INFRASTRUCTURE ID --
 # not the cluster name, as it did before the bootstrap increment -- so that
 # string is the name placeholder and must not be used for anything else. The
 # reason for the change, and the two-phase workflow it requires, are in
@@ -20,11 +34,10 @@
 # Namespace: the installer forces every object into
 # openshift-cluster-api-guests (pkg/infrastructure/clusterapi/clusterapi.go:183),
 # so these values are for fidelity with the integrated sample, not load-bearing.
----
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
-  name: mrb-ext0
+  name: CLUSTER_ID
   namespace: openshift-cluster-api-guests
 spec:
   clusterNetwork:
@@ -35,7 +48,7 @@ spec:
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
     kind: AWSCluster
-    name: mrb-ext0
+    name: CLUSTER_ID
     namespace: openshift-cluster-api-guests
 ---
 # CAPA creates this itself if it is absent -- the v6 pilot run logged
@@ -56,7 +69,7 @@ spec:
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: AWSCluster
 metadata:
-  name: mrb-ext0
+  name: CLUSTER_ID
   namespace: openshift-cluster-api-guests
 spec:
   # DEPARTURE 1 is RETIRED as of the bootstrap increment. Superseded text kept
@@ -83,7 +96,7 @@ spec:
   # instance of it: a partner who does NOT run a two-phase workflow still
   # cannot know the infrastructure ID.
   additionalTags:
-    kubernetes.io/cluster/mrb-ext0: owned
+    kubernetes.io/cluster/CLUSTER_ID: owned
   bastion:
     enabled: false
   controlPlaneEndpoint:
@@ -118,7 +131,7 @@ spec:
       - controlplane
       toPort: 22623
     loadBalancerType: nlb
-    name: mrb-ext0-int
+    name: CLUSTER_ID-int
     scheme: internal
     targetGroupIPType: ipv4
   network:
@@ -217,11 +230,11 @@ spec:
     subnets:
     - availabilityZone: us-east-1a
       cidrBlock: 10.0.0.0/19
-      id: mrb-ext0-subnet-private-us-east-1a
+      id: CLUSTER_ID-subnet-private-us-east-1a
       isPublic: false
     - availabilityZone: us-east-1a
       cidrBlock: 10.0.160.0/22
-      id: mrb-ext0-subnet-public-us-east-1a
+      id: CLUSTER_ID-subnet-public-us-east-1a
       isPublic: true
     vpc:
       cidrBlock: 10.0.0.0/16
@@ -250,7 +263,7 @@ spec:
   # a leak visible instead of quiet.
   s3Bucket:
     bestEffortDeleteObjects: false
-    name: openshift-bootstrap-data-mrb-ext0
+    name: openshift-bootstrap-data-CLUSTER_ID
     presignedURLDuration: 1h0m0s
   secondaryControlPlaneLoadBalancer:
     crossZoneLoadBalancing: true
@@ -268,6 +281,6 @@ spec:
       protocol: tcp
       toPort: 6443
     loadBalancerType: nlb
-    name: mrb-ext0-ext
+    name: CLUSTER_ID-ext
     scheme: internet-facing
     targetGroupIPType: ipv4

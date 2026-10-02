@@ -52,7 +52,6 @@
 #
 # It is not pinned here because the right image is whichever one matches the
 # release being installed.
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -113,10 +112,10 @@ spec:
           --leader-elect-resource-namespace=openshift-cloud-controller-manager \
           -v=2
         env:
-          # The AWS SDK reads this path if the file exists and falls back to
-          # the instance metadata service if it does not, so this line is
-          # correct both for this pilot (no IAM, credentials in a Secret) and
-          # for a partner using an instance profile.
+        # The AWS SDK reads this path if the file exists and falls back to
+        # the instance metadata service if it does not, so this line is
+        # correct both for this pilot (no IAM, credentials in a Secret) and
+        # for a partner using an instance profile.
         - name: AWS_SHARED_CREDENTIALS_FILE
           value: /etc/aws/credentials
         ports:
@@ -147,10 +146,10 @@ spec:
                 k8s-app: aws-cloud-controller-manager
                 infrastructure.openshift.io/cloud-controller-manager: aws
       tolerations:
-        # Every one of these is load-bearing. When this pod is created the only
-        # nodes in the cluster are masters that are NotReady and uninitialized,
-        # and a CCM that cannot be scheduled onto one of them can never remove
-        # the taint that is keeping them that way.
+      # Every one of these is load-bearing. When this pod is created the only
+      # nodes in the cluster are masters that are NotReady and uninitialized,
+      # and a CCM that cannot be scheduled onto one of them can never remove
+      # the taint that is keeping them that way.
       - key: node-role.kubernetes.io/master
         effect: NoSchedule
         operator: Exists

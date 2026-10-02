@@ -27,17 +27,30 @@ CAPOCI reconciles them into OCI instances.
 
 ## The substitution contract
 
-Three tokens appear across every file in this directory and in `../cluster.yaml`.
-`../../scripts/run-create-command.sh` rewrites all three; nothing else does.
+Every placeholder in this example is `UPPER_SNAKE_CASE`, the same convention the
+`aws-capa` example uses. That spelling is deliberate: an underscore is **not**
+legal in a Kubernetes object name or a DNS label, so a token that survives
+substitution is rejected loudly by the API server or by CAPOCI instead of
+quietly creating cloud resources literally named `CLUSTER_ID-vcn`.
 
-| Token | Replaced with | Known when |
-| --- | --- | --- |
-| `CLUSTER-ID` | the run's infrastructure ID, e.g. `mrb-oci1-knzjv` | after `create manifests` — read from `metadata.json` |
-| `COMPARTMENT-OCID` | `$OCI_COMPARTMENT_ID` | before the run |
-| `IMAGE-OCID` | the imported RHCOS custom image OCID | before the run, once — see `../../docs/boot-image.md` |
-| `REGION`, `CLUSTERDNS` | `../cluster.yaml` only | before the run |
+`../../scripts/run-create-command.sh` rewrites all of them; nothing else does.
+Three appear in this directory; five appear in `../cluster.yaml`.
 
-`CLUSTER-ID` is the infrastructure ID, **not** the cluster name. The installer
+| Token | Replaced with | Known when | Where |
+| --- | --- | --- | --- |
+| `CLUSTER_ID` | the run's infrastructure ID, e.g. `mrb-oci1-knzjv` | after `create manifests` — read from `metadata.json` | here and `../cluster.yaml` |
+| `COMPARTMENT_OCID` | `$OCI_COMPARTMENT_ID` | before the run | here and `../cluster.yaml` |
+| `IMAGE_OCID` | the imported RHCOS custom image OCID | before the run, once — see `../../docs/boot-image.md` | here only |
+| `REGION_ID` | `$OCI_REGION`, e.g. `us-ashburn-1` | before the run | `../cluster.yaml` only |
+| `CLUSTER_DNS` | `<cluster name>.<base domain>` | before the run | `../cluster.yaml` only |
+| `VCN_DNS_LABEL` | the infrastructure ID reduced to ≤15 alphanumerics | derived from `CLUSTER_ID` | `../cluster.yaml` only |
+
+The cluster **name** is a separate placeholder, `CHANGE-ME` in
+`../../install-config.yaml`. It is hyphenated rather than `UPPER_SNAKE` because
+it is a DNS-1123 field the installer validates directly, so an underscore there
+would fail at `create install-config` before the example could be read.
+
+`CLUSTER_ID` is the infrastructure ID, **not** the cluster name. The installer
 appends a five-character random suffix at `create manifests` time, and the
 `Cluster` object's name must match it or the `Machine` objects' `clusterName`
 will not resolve.
@@ -80,7 +93,7 @@ commands:
 
 ```
   1. openshift-install create manifests
-         → metadata.json exists; CLUSTER-ID is now known
+         → metadata.json exists; CLUSTER_ID is now known
   2. substitute tokens; copy this directory into <install-dir>/external-install/
   3. openshift-install create ignition-configs
          → bootstrap.ign (hundreds of KiB), master.ign, worker.ign (~1.7 KiB)
@@ -114,7 +127,7 @@ before the machines are created (`pkg/infrastructure/clusterapi/clusterapi.go`
 — `Ignition()` at :361, Secrets created at :372).
 
 Ignition Secrets are **per role, not per machine**. The three master machines
-share `CLUSTER-ID-master`; there is no per-machine variant and no way to ask for
+share `CLUSTER_ID-master`; there is no per-machine variant and no way to ask for
 one. CAPOCI reads whichever Secret the `Machine` names, verbatim:
 `GetBootstrapData()` returns `secret.Data["value"]` unchanged
 (`cloud/scope/machine.go:685-702`), then base64-encodes it into

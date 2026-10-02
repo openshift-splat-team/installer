@@ -69,7 +69,7 @@ else.
 
 | File | Line | Value | Should become |
 | --- | --- | --- | --- |
-| `install-config.yaml` | 3 | `name: mrb-ext0` | a neutral placeholder, e.g. `example-cluster` |
+| ~~`install-config.yaml`~~ | ~~3~~ | ~~`name: mrb-ext0`~~ | **done** — now `CHANGE-ME`, matching `oci-capoci` |
 | `install-config.yaml` | 4 | `baseDomain: splat.devcluster.openshift.com` | `<your base domain>` |
 | `install-config.yaml` | 11–12 | `/tmp/capa-artifacts/...` | fine as a documented default; call it out |
 | `install-config.yaml` | 41 | `--input-dns-zone=Z00517…` | `<your public hosted zone id>` |

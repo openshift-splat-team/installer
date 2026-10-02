@@ -361,12 +361,12 @@ fi
 # (api/v1beta2/types.go), so nothing here needs a second pass after CAPOCI
 # builds the network.
 sed -i \
-	-e "s/CLUSTER-ID/${INFRA_ID}/g" \
-	-e "s|COMPARTMENT-OCID|${OCI_COMPARTMENT_ID}|g" \
-	-e "s|IMAGE-OCID|${OCI_IMAGE_ID}|g" \
-	-e "s/REGION/${OCI_REGION}/g" \
-	-e "s/VCNDNSLABEL/${VCN_DNS_LABEL}/g" \
-	-e "s/CLUSTERDNS/${CLUSTER_DOMAIN}/g" \
+	-e "s/CLUSTER_ID/${INFRA_ID}/g" \
+	-e "s|COMPARTMENT_OCID|${OCI_COMPARTMENT_ID}|g" \
+	-e "s|IMAGE_OCID|${OCI_IMAGE_ID}|g" \
+	-e "s/REGION_ID/${OCI_REGION}/g" \
+	-e "s/VCN_DNS_LABEL/${VCN_DNS_LABEL}/g" \
+	-e "s/CLUSTER_DNS/${CLUSTER_DOMAIN}/g" \
 	"${INSTALL_DIR}/external-install/cluster.yaml" \
 	"${INSTALL_DIR}/external-install/00_oci-credentials.yaml" \
 	"${INSTALL_DIR}"/external-install/machines/*.yaml
@@ -393,11 +393,11 @@ SUBST_INPUTS=(
 	"${INSTALL_DIR}"/external-install/machines/*.yaml
 )
 if grep -qE \
-	'CLUSTER-ID|COMPARTMENT-OCID|IMAGE-OCID|CLUSTERDNS|VCNDNSLABEL' \
+	'CLUSTER_ID|COMPARTMENT_OCID|IMAGE_OCID|REGION_ID|CLUSTER_DNS|VCN_DNS_LABEL' \
 	"${SUBST_INPUTS[@]}"; then
 	echo "placeholders survived substitution under ${INSTALL_DIR}/external-install/"
 	grep -lE \
-		'CLUSTER-ID|COMPARTMENT-OCID|IMAGE-OCID|CLUSTERDNS|VCNDNSLABEL' \
+		'CLUSTER_ID|COMPARTMENT_OCID|IMAGE_OCID|REGION_ID|CLUSTER_DNS|VCN_DNS_LABEL' \
 		"${SUBST_INPUTS[@]}"
 	exit 1
 fi

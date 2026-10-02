@@ -1,3 +1,17 @@
+# yamllint disable rule:document-start
+#
+# The disable covers the `---` SEPARATORS below, not a document-start marker:
+# this file holds several objects and the separators are structural. This
+# repository's .yamllint sets `document-start: present: false`, a rule written
+# for single-document files -- yamllint reports every `---` under it and
+# cannot tell a separator from a leading marker. The leading marker this file
+# used to carry has been removed; what is left cannot be.
+#
+# Why several objects in one file rather than one each, which is what
+# extra-manifests/ requires: this directory is NOT applied by the bootstrap
+# node. It is read by the installer's local Cluster API control plane, which
+# decodes multi-document YAML correctly (ObjectsFromManifest). The two
+# directories have genuinely different contracts.
 # Bootstrap machine for a `platform: external` install driven by CAPOCI.
 #
 # STATUS: NEVER RUN. See ../cluster.yaml.
@@ -15,50 +29,49 @@
 # Storage and overwrites the on-disk bootstrap.ign with a ~300-byte pointer
 # config BEFORE `create cluster` reads it. See ../../docs/ignition-delivery.md.
 #
-# So by the time this Machine is created, CLUSTER-ID-bootstrap holds the
+# So by the time this Machine is created, CLUSTER_ID-bootstrap holds the
 # pointer, not the payload, and the size problem is already gone.
 #
 # Tokens rewritten by run-create-command.sh:
-#   CLUSTER-ID        -> the run's infrastructure ID
-#   IMAGE-OCID        -> the imported RHCOS custom image OCID
-#   COMPARTMENT-OCID  -> $OCI_COMPARTMENT_ID
----
+#   CLUSTER_ID        -> the run's infrastructure ID
+#   IMAGE_OCID        -> the imported RHCOS custom image OCID
+#   COMPARTMENT_OCID  -> $OCI_COMPARTMENT_ID
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Machine
 metadata:
-  name: CLUSTER-ID-bootstrap
+  name: CLUSTER_ID-bootstrap
   namespace: openshift-cluster-api-guests
   labels:
     cluster.x-k8s.io/control-plane: ""
 spec:
-  clusterName: CLUSTER-ID
+  clusterName: CLUSTER_ID
   bootstrap:
     # The installer chooses this name; nobody else can. It is built from the
     # infrastructure ID in pkg/infrastructure/external/clusterapi/ignition.go,
     # which is why this tree must be rewritten between `create manifests` and
     # `create cluster`. See README.md.
-    dataSecretName: CLUSTER-ID-bootstrap
+    dataSecretName: CLUSTER_ID-bootstrap
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
     kind: OCIMachine
-    name: CLUSTER-ID-bootstrap
+    name: CLUSTER_ID-bootstrap
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OCIMachine
 metadata:
-  name: CLUSTER-ID-bootstrap
+  name: CLUSTER_ID-bootstrap
   namespace: openshift-cluster-api-guests
   labels:
     cluster.x-k8s.io/control-plane: ""
     install.openshift.io/bootstrap: ""
 spec:
-  compartmentId: COMPARTMENT-OCID
+  compartmentId: COMPARTMENT_OCID
   # No selector exists for this. OCIMachine.spec.imageId is a bare OCID --
   # there is no imageLookup or tag filter as CAPA has for AMIs -- so the
   # imported RHCOS image's OCID must be substituted in. Which image, and
   # whether a usable one can be built at all, is the open blocker in
   # ../../docs/boot-image.md.
-  imageId: IMAGE-OCID
+  imageId: IMAGE_OCID
   shape: VM.Standard.E4.Flex
   shapeConfig:
     ocpus: "4"
@@ -70,7 +83,7 @@ spec:
   #
   # MEASURED, not read. This block first said
   #
-  #     subnetName: CLUSTER-ID-subnet-cp-endpoint
+  #     subnetName: CLUSTER_ID-subnet-cp-endpoint
   #     assignPublicIp: true
   #
   # and the launch failed, leaving the instance TERMINATED and the install with
@@ -80,7 +93,7 @@ spec:
   #     CreateVnic operation in VcnInternalService
   #
   # The subnet in that error was NOT the one named above. It was
-  # CLUSTER-ID-subnet-control-plane (10.0.0.32/27, prohibitPublicIpOnVnic
+  # CLUSTER_ID-subnet-control-plane (10.0.0.32/27, prohibitPublicIpOnVnic
   # true), because CAPOCI never read the name.
   #
   # WHY, AND IT IS A REAL CAPOCI DEFECT RATHER THAN A MISREADING OF THE SCHEMA.
@@ -132,7 +145,7 @@ spec:
   networkDetails:
     assignPublicIp: false
   freeformTags:
-    openshift-cluster-id: CLUSTER-ID
+    openshift-cluster-id: CLUSTER_ID
     # Read by hooks/infra-hook.sh at postProvision to find the instances that
     # must become backends of the 22623 listener.
     openshift-machine-role: bootstrap

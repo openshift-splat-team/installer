@@ -99,6 +99,25 @@ contract require the partner to know the infrastructure ID, or should the
 installer adapt to the naming in the user's own manifests? Today it is the
 former, by accident rather than by decision.
 
+## The substitution contract
+
+| Token | Replaced with | Known when | Where |
+| --- | --- | --- | --- |
+| `CLUSTER_ID` | the run's infrastructure ID, e.g. `example-cluster-knzjv` | after `create manifests` | here and `../cluster.yaml` |
+| `ami-REPLACE` | the RHCOS AMI for the region | before the run — `coreos print-stream-json` | here only |
+
+`CLUSTER_ID` is the infrastructure ID, **not** the cluster name. The cluster
+name is a separate placeholder, `CHANGE-ME` in `../../install-config.yaml`,
+substituted in a different file at a different time.
+
+Both examples use the same `UPPER_SNAKE_CASE` spelling for this token — see
+`../../../oci-capoci/external-install/machines/README.md`. The underscore is
+deliberate: it is not legal in a Kubernetes object name or a DNS label, so a
+token that survives substitution is rejected loudly rather than quietly
+creating cloud resources literally named `CLUSTER_ID-subnet-private`. The
+cluster-name placeholder stays hyphenated because `metadata.name` is a
+DNS-1123 field the installer validates directly.
+
 ## What a partner has to get right, and what they get for free
 
 From the bootstrap manifest, the whole of the CAPA-side contract is:

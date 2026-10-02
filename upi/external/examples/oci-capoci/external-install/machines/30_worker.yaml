@@ -1,3 +1,17 @@
+# yamllint disable rule:document-start
+#
+# The disable covers the `---` SEPARATORS below, not a document-start marker:
+# this file holds several objects and the separators are structural. This
+# repository's .yamllint sets `document-start: present: false`, a rule written
+# for single-document files -- yamllint reports every `---` under it and
+# cannot tell a separator from a leading marker. The leading marker this file
+# used to carry has been removed; what is left cannot be.
+#
+# Why several objects in one file rather than one each, which is what
+# extra-manifests/ requires: this directory is NOT applied by the bootstrap
+# node. It is read by the installer's local Cluster API control plane, which
+# decodes multi-document YAML correctly (ObjectsFromManifest). The two
+# directories have genuinely different contracts.
 # Worker machines for a `platform: external` install driven by CAPOCI.
 #
 # STATUS: NEVER RUN. See ../cluster.yaml.
@@ -45,8 +59,8 @@
 #    6443 or 22623, and its absence from those backends is the correct
 #    outcome, not a defect to fix.
 #
-# 2. `dataSecretName: CLUSTER-ID-worker`. Pointing a worker at
-#    CLUSTER-ID-master would hand it the master pointer config and it would
+# 2. `dataSecretName: CLUSTER_ID-worker`. Pointing a worker at
+#    CLUSTER_ID-master would hand it the master pointer config and it would
 #    join as a control-plane node.
 #
 # 3. The pointer aims at https://api-int.<clusterDomain>:22623/config/worker,
@@ -69,32 +83,31 @@
 # for and approves without a human; not scheduled.
 #
 # Tokens rewritten by run-create-command.sh:
-#   CLUSTER-ID        -> the run's infrastructure ID
-#   IMAGE-OCID        -> the imported RHCOS custom image OCID
-#   COMPARTMENT-OCID  -> $OCI_COMPARTMENT_ID
----
+#   CLUSTER_ID        -> the run's infrastructure ID
+#   IMAGE_OCID        -> the imported RHCOS custom image OCID
+#   COMPARTMENT_OCID  -> $OCI_COMPARTMENT_ID
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Machine
 metadata:
-  name: CLUSTER-ID-worker-0
+  name: CLUSTER_ID-worker-0
   namespace: openshift-cluster-api-guests
 spec:
-  clusterName: CLUSTER-ID
+  clusterName: CLUSTER_ID
   bootstrap:
-    dataSecretName: CLUSTER-ID-worker
+    dataSecretName: CLUSTER_ID-worker
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
     kind: OCIMachine
-    name: CLUSTER-ID-worker-0
+    name: CLUSTER_ID-worker-0
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OCIMachine
 metadata:
-  name: CLUSTER-ID-worker-0
+  name: CLUSTER_ID-worker-0
   namespace: openshift-cluster-api-guests
 spec:
-  compartmentId: COMPARTMENT-OCID
-  imageId: IMAGE-OCID
+  compartmentId: COMPARTMENT_OCID
+  imageId: IMAGE_OCID
   shape: VM.Standard.E4.Flex
   shapeConfig:
     ocpus: "4"
@@ -111,35 +124,35 @@ spec:
     # (cloud/scope/machine.go:1075) returns the first worker-role subnet, which
     # is this one. Moving it to the top level would make it load-bearing; it is
     # left here so all three machine manifests read the same way.
-    subnetName: CLUSTER-ID-subnet-worker
+    subnetName: CLUSTER_ID-subnet-worker
     assignPublicIp: false
   freeformTags:
-    openshift-cluster-id: CLUSTER-ID
+    openshift-cluster-id: CLUSTER_ID
     openshift-machine-role: worker
   metadata: {}
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Machine
 metadata:
-  name: CLUSTER-ID-worker-1
+  name: CLUSTER_ID-worker-1
   namespace: openshift-cluster-api-guests
 spec:
-  clusterName: CLUSTER-ID
+  clusterName: CLUSTER_ID
   bootstrap:
-    dataSecretName: CLUSTER-ID-worker
+    dataSecretName: CLUSTER_ID-worker
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
     kind: OCIMachine
-    name: CLUSTER-ID-worker-1
+    name: CLUSTER_ID-worker-1
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OCIMachine
 metadata:
-  name: CLUSTER-ID-worker-1
+  name: CLUSTER_ID-worker-1
   namespace: openshift-cluster-api-guests
 spec:
-  compartmentId: COMPARTMENT-OCID
-  imageId: IMAGE-OCID
+  compartmentId: COMPARTMENT_OCID
+  imageId: IMAGE_OCID
   shape: VM.Standard.E4.Flex
   shapeConfig:
     ocpus: "4"
@@ -156,9 +169,9 @@ spec:
     # (cloud/scope/machine.go:1075) returns the first worker-role subnet, which
     # is this one. Moving it to the top level would make it load-bearing; it is
     # left here so all three machine manifests read the same way.
-    subnetName: CLUSTER-ID-subnet-worker
+    subnetName: CLUSTER_ID-subnet-worker
     assignPublicIp: false
   freeformTags:
-    openshift-cluster-id: CLUSTER-ID
+    openshift-cluster-id: CLUSTER_ID
     openshift-machine-role: worker
   metadata: {}

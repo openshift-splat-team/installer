@@ -1,3 +1,17 @@
+# yamllint disable rule:document-start
+#
+# The disable covers the `---` SEPARATORS below, not a document-start marker:
+# this file holds several objects and the separators are structural. This
+# repository's .yamllint sets `document-start: present: false`, a rule written
+# for single-document files -- yamllint reports every `---` under it and
+# cannot tell a separator from a leading marker. The leading marker this file
+# used to carry has been removed; what is left cannot be.
+#
+# Why several objects in one file rather than one each, which is what
+# extra-manifests/ requires: this directory is NOT applied by the bootstrap
+# node. It is read by the installer's local Cluster API control plane, which
+# decodes multi-document YAML correctly (ObjectsFromManifest). The two
+# directories have genuinely different contracts.
 # Worker machines for a `platform: external` install driven by CAPA.
 #
 # USER-SUPPLIED, like everything in this tree, and OPTIONAL: delete this file
@@ -5,7 +19,7 @@
 # to and including mrb-ext12 did exactly that.
 #
 # `run-create-command.sh` rewrites two tokens before `create cluster`:
-#   mrb-ext0     -> the run's infrastructure ID
+#   CLUSTER_ID     -> the run's infrastructure ID
 #   ami-REPLACE  -> the region's RHCOS AMI
 #
 #
@@ -41,7 +55,7 @@
 #    Do not "fix" a worker that is missing from the API target groups. That is
 #    the correct outcome.
 #
-# 2. `dataSecretName: mrb-ext0-worker`. This Secret did not exist until the
+# 2. `dataSecretName: CLUSTER_ID-worker`. This Secret did not exist until the
 #    External provider began implementing IgnitionProvider -- see
 #    pkg/infrastructure/external/clusterapi/ignition.go. The shared default
 #    branch creates only `<infraID>-bootstrap` and `<infraID>-master`, which is
@@ -107,30 +121,29 @@
 #
 # One AZ, for the same reason ../20_master.yaml gives: ../cluster.yaml defines
 # only us-east-1a.
----
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Machine
 metadata:
-  name: mrb-ext0-worker-0
+  name: CLUSTER_ID-worker-0
   namespace: openshift-cluster-api-guests
   # No cluster.x-k8s.io/control-plane label. See note 1 above.
 spec:
-  clusterName: mrb-ext0
+  clusterName: CLUSTER_ID
   bootstrap:
-    dataSecretName: mrb-ext0-worker
+    dataSecretName: CLUSTER_ID-worker
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
     kind: AWSMachine
-    name: mrb-ext0-worker-0
+    name: CLUSTER_ID-worker-0
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: AWSMachine
 metadata:
-  name: mrb-ext0-worker-0
+  name: CLUSTER_ID-worker-0
   namespace: openshift-cluster-api-guests
 spec:
   additionalTags:
-    kubernetes.io/cluster/mrb-ext0: owned
+    kubernetes.io/cluster/CLUSTER_ID: owned
   ami:
     id: ami-REPLACE
   instanceType: m6i.xlarge
@@ -155,34 +168,34 @@ spec:
     filters:
     - name: tag:Name
       values:
-      - mrb-ext0-subnet-private-us-east-1a
-  #
-  # Deliberately NOT set, same as the masters: iamInstanceProfile (this pilot
-  # creates no IAM), and any security group or load balancer reference (CAPA
-  # derives both from the absence of the control-plane label).
+      - CLUSTER_ID-subnet-private-us-east-1a
+#
+# Deliberately NOT set, same as the masters: iamInstanceProfile (this pilot
+# creates no IAM), and any security group or load balancer reference (CAPA
+# derives both from the absence of the control-plane label).
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Machine
 metadata:
-  name: mrb-ext0-worker-1
+  name: CLUSTER_ID-worker-1
   namespace: openshift-cluster-api-guests
 spec:
-  clusterName: mrb-ext0
+  clusterName: CLUSTER_ID
   bootstrap:
-    dataSecretName: mrb-ext0-worker
+    dataSecretName: CLUSTER_ID-worker
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
     kind: AWSMachine
-    name: mrb-ext0-worker-1
+    name: CLUSTER_ID-worker-1
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: AWSMachine
 metadata:
-  name: mrb-ext0-worker-1
+  name: CLUSTER_ID-worker-1
   namespace: openshift-cluster-api-guests
 spec:
   additionalTags:
-    kubernetes.io/cluster/mrb-ext0: owned
+    kubernetes.io/cluster/CLUSTER_ID: owned
   ami:
     id: ami-REPLACE
   instanceType: m6i.xlarge
@@ -202,4 +215,4 @@ spec:
     filters:
     - name: tag:Name
       values:
-      - mrb-ext0-subnet-private-us-east-1a
+      - CLUSTER_ID-subnet-private-us-east-1a

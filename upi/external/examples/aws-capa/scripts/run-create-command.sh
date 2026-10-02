@@ -40,15 +40,17 @@ cp -v install-config.yaml ${INSTALL_DIR}/
 
 cp -rvf external-install/ ${INSTALL_DIR}/external-install/
 
-# The cluster name is the DNS name and belongs in install-config. This runs
-# before the pull secret is injected below, so the copy being edited here
-# still holds no credential.
-sed -i "s/mrb-ext0/${CLUSTER_NAME}/g" ${INSTALL_DIR}/install-config.yaml
+# The cluster name is the DNS name and belongs in install-config. It is a
+# DIFFERENT placeholder from CLUSTER_ID below: that one is the infrastructure
+# ID, which the installer derives from this name plus a random suffix and
+# which does not exist yet at this point. This runs before the pull secret is
+# injected below, so the copy being edited here still holds no credential.
+sed -i "s/^  name: CHANGE-ME$/  name: ${CLUSTER_NAME}/" ${INSTALL_DIR}/install-config.yaml
 
-# Assert the substitution landed. The template carried `name: mrb-ext` rather
-# than the `mrb-ext0` placeholder for several runs, so this sed matched
-# nothing and every cluster was silently named `mrb-ext` regardless of the
-# version argument -- visible only as an infrastructure ID of `mrb-ext-xxxxx`.
+# Assert the substitution landed. An earlier template carried `name: mrb-ext`
+# rather than the placeholder, so this sed matched nothing and every cluster
+# was silently named `mrb-ext` regardless of the version argument -- visible
+# only as an infrastructure ID of `mrb-ext-xxxxx`.
 # A no-op sed is indistinguishable from a successful one without this check.
 if [[ $(grep -c "^  name: ${CLUSTER_NAME}$" ${INSTALL_DIR}/install-config.yaml) -ne 1 ]]; then
 	echo "install-config metadata.name is not ${CLUSTER_NAME}; the template placeholder has drifted"
@@ -155,15 +157,15 @@ fi
 # The whole CAPI tree is named by infrastructure ID, so the resource tags, the
 # load balancer names and the subnet names all agree with what the installed
 # cluster will call itself.
-sed -i "s/mrb-ext0/${INFRA_ID}/g" ${INSTALL_DIR}/external-install/cluster.yaml
-sed -i "s/mrb-ext0/${INFRA_ID}/g" ${INSTALL_DIR}/external-install/machines/*.yaml
+sed -i "s/CLUSTER_ID/${INFRA_ID}/g" ${INSTALL_DIR}/external-install/cluster.yaml
+sed -i "s/CLUSTER_ID/${INFRA_ID}/g" ${INSTALL_DIR}/external-install/machines/*.yaml
 sed -i "s/ami-REPLACE/${RHCOS_AMI}/g" ${INSTALL_DIR}/external-install/machines/*.yaml
 
 # Same reasoning as the install-config guard: an unsubstituted placeholder
 # reaches the cloud as a literal and is only noticed once resources exist.
-if grep -rqE 'mrb-ext0|ami-REPLACE' ${INSTALL_DIR}/external-install/; then
+if grep -rqE 'CLUSTER_ID|ami-REPLACE' ${INSTALL_DIR}/external-install/; then
 	echo "placeholders survived substitution under ${INSTALL_DIR}/external-install/"
-	grep -rlE 'mrb-ext0|ami-REPLACE' ${INSTALL_DIR}/external-install/
+	grep -rlE 'CLUSTER_ID|ami-REPLACE' ${INSTALL_DIR}/external-install/
 	exit 1
 fi
 

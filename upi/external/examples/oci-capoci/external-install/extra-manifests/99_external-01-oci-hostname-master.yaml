@@ -1,3 +1,10 @@
+# yamllint disable rule:line-length
+#
+# The long line is the Ignition data URL carrying the base64 of the script
+# reproduced in full below. Ignition requires file contents as a single data
+# URL, so it cannot be wrapped; the plaintext under it is what a reviewer
+# should read instead.
+#
 # Set every node's hostname from the OCI instance metadata service.
 #
 # The other half of what `platform: external` needs before a node can go Ready.
@@ -86,7 +93,6 @@
 #   hostnamectl set-hostname "${name}"
 #   echo "hostname set to ${name}"
 #
----
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:

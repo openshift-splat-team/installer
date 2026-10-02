@@ -1,3 +1,17 @@
+# yamllint disable rule:document-start
+#
+# The disable covers the `---` SEPARATORS below, not a document-start marker:
+# this file holds several objects and the separators are structural. This
+# repository's .yamllint sets `document-start: present: false`, a rule written
+# for single-document files -- yamllint reports every `---` under it and
+# cannot tell a separator from a leading marker. The leading marker this file
+# used to carry has been removed; what is left cannot be.
+#
+# Why several objects in one file rather than one each, which is what
+# extra-manifests/ requires: this directory is NOT applied by the bootstrap
+# node. It is read by the installer's local Cluster API control plane, which
+# decodes multi-document YAML correctly (ObjectsFromManifest). The two
+# directories have genuinely different contracts.
 # Bootstrap machine for a `platform: external` install driven by CAPA.
 #
 # USER-SUPPLIED, like everything in this tree. pkg/asset/machines/clusterapi.go
@@ -9,12 +23,11 @@
 # ../../sample-aws-manifests/cluster-api/machines/10_{machine,inframachine}_aws-sample-dh4wr-bootstrap.yaml
 #
 # `run-create-command.sh` rewrites two tokens before `create cluster`:
-#   mrb-ext0     -> the run's infrastructure ID, read from the generated
+#   CLUSTER_ID     -> the run's infrastructure ID, read from the generated
 #                   manifests after `create manifests`. See ../../machines
 #                   README for why this cannot be the cluster name.
 #   ami-REPLACE  -> the region's RHCOS AMI. pkg/asset/rhcos/image.go returns ""
 #                   for platform: external, so nothing supplies this for us.
----
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Machine
 metadata:
@@ -23,7 +36,7 @@ metadata:
   # (pkg/infrastructure/clusterapi/clusterapi.go, GenerateBoostrapMachineName),
   # and bootstrap log gathering globs for *-bootstrap.yaml among the collected
   # artifacts. Neither reads a label, so the name is the whole contract.
-  name: mrb-ext0-bootstrap
+  name: CLUSTER_ID-bootstrap
   namespace: openshift-cluster-api-guests
   labels:
     # Load-bearing. CAPA reads this from the CORE Machine, not the AWSMachine,
@@ -38,23 +51,23 @@ spec:
   # copies this into the cluster.x-k8s.io/cluster-name label, and that label is
   # how AWSMachineReconciler resolves the cluster. A mismatch does not error --
   # the AWSMachine is simply never reconciled.
-  clusterName: mrb-ext0
+  clusterName: CLUSTER_ID
   bootstrap:
     # Not parameterisable, and the reason this tree needs the infrastructure ID
     # rather than the cluster name. The installer creates this Secret itself,
     # named "<infraID>-<role>", in the local control plane
     # (pkg/infrastructure/clusterapi/clusterapi.go, IgnitionSecret). Nothing
     # lets a user choose the name, so the manifest has to match the installer.
-    dataSecretName: mrb-ext0-bootstrap
+    dataSecretName: CLUSTER_ID-bootstrap
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
     kind: AWSMachine
-    name: mrb-ext0-bootstrap
+    name: CLUSTER_ID-bootstrap
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: AWSMachine
 metadata:
-  name: mrb-ext0-bootstrap
+  name: CLUSTER_ID-bootstrap
   namespace: openshift-cluster-api-guests
   labels:
     cluster.x-k8s.io/control-plane: ""
@@ -66,7 +79,7 @@ spec:
   # infrastructure ID so that both agree with the in-cluster
   # Infrastructure.status.infrastructureName.
   additionalTags:
-    kubernetes.io/cluster/mrb-ext0: owned
+    kubernetes.io/cluster/CLUSTER_ID: owned
   ami:
     id: ami-REPLACE
   instanceType: m6i.xlarge
@@ -100,26 +113,26 @@ spec:
     filters:
     - name: tag:Name
       values:
-      - mrb-ext0-subnet-public-us-east-1a
-  #
-  # Deliberately NOT set:
-  #
-  #   iamInstanceProfile - the integrated path sets <infraID>-master-profile,
-  #     created by the installer's own PreProvision
-  #     (pkg/infrastructure/aws/clusterapi/iam.go). The External provider's
-  #     PreProvision makes no cloud calls, and this pilot creates no IAM. CAPA
-  #     treats the field as optional and launches the instance without a
-  #     profile. The bootstrap ignition still arrives, because the presigned
-  #     URL needs no instance credentials.
-  #
-  #   securityGroupOverrides / additionalSecurityGroups - CAPA selects
-  #     node + lb + controlplane from AWSCluster.status.network.securityGroups
-  #     using the control-plane label above.
-  #
-  #   any load balancer reference - CAPA registers control-plane machines with
-  #     AWSCluster.spec.{controlPlane,secondaryControlPlane}LoadBalancer. The
-  #     machine names no target group. A provider that instead required
-  #     explicit target-group references here would force a post-provisioning
-  #     edit, and the External contract should say so.
-  #
-  #   placement / availabilityZone - implied by the subnet filter.
+      - CLUSTER_ID-subnet-public-us-east-1a
+#
+# Deliberately NOT set:
+#
+#   iamInstanceProfile - the integrated path sets <infraID>-master-profile,
+#     created by the installer's own PreProvision
+#     (pkg/infrastructure/aws/clusterapi/iam.go). The External provider's
+#     PreProvision makes no cloud calls, and this pilot creates no IAM. CAPA
+#     treats the field as optional and launches the instance without a
+#     profile. The bootstrap ignition still arrives, because the presigned
+#     URL needs no instance credentials.
+#
+#   securityGroupOverrides / additionalSecurityGroups - CAPA selects
+#     node + lb + controlplane from AWSCluster.status.network.securityGroups
+#     using the control-plane label above.
+#
+#   any load balancer reference - CAPA registers control-plane machines with
+#     AWSCluster.spec.{controlPlane,secondaryControlPlane}LoadBalancer. The
+#     machine names no target group. A provider that instead required
+#     explicit target-group references here would force a post-provisioning
+#     edit, and the External contract should say so.
+#
+#   placement / availabilityZone - implied by the subnet filter.

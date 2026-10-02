@@ -71,7 +71,6 @@
 # this Service -- the cluster is gone before the CCM could act on it -- so the
 # load balancer it built would be orphaned. The hook records the ARN when it
 # creates the record and deletes both on the way out.
----
 apiVersion: v1
 kind: Service
 metadata:

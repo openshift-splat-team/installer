@@ -1,3 +1,10 @@
+# yamllint disable rule:line-length
+#
+# The long line is the Ignition data URL carrying the base64 of the script
+# reproduced in full below. Ignition requires file contents as a single data
+# URL, so it cannot be wrapped; the plaintext under it is what a reviewer
+# should read instead.
+#
 # Give every node a cloud provider ID, so a cloud controller manager can
 # identify it.
 #
@@ -17,7 +24,6 @@
 # by Oracle for OCI (oci-openshift/custom_manifests/manifests/02-machineconfig-ccm.yml),
 # which is the strongest evidence available that it is the cross-provider
 # answer rather than an AWS workaround.
----
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:

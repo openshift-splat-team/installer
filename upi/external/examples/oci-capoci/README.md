@@ -345,8 +345,8 @@ export PULL_SECRET_FILE=…               # passed by path, never read into a va
 Read the infrastructure ID out of
 `manifests/cluster-infrastructure-02-config.yml` — it is the cluster name plus
 a five-character random suffix, and the `Cluster` object's name **must** match
-it. Then substitute `CLUSTER-ID`, `COMPARTMENT-OCID`, `IMAGE-OCID`, `REGION`
-and `CLUSTERDNS` through `external-install/` and copy the result into
+it. Then substitute `CLUSTER_ID`, `COMPARTMENT_OCID`, `IMAGE_OCID`, `REGION_ID`
+and `CLUSTER_DNS` through `external-install/` and copy the result into
 `<install-dir>/external-install/`.
 
 > The generated manifest tree is a credential store — it holds TLS and CA

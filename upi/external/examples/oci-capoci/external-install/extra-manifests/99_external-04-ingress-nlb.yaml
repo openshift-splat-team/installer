@@ -71,7 +71,6 @@
 #
 # Teardown is the same hook's pre-destroy path. `destroy cluster` never deletes
 # this Service, so the load balancer the CCM built for it would be orphaned.
----
 apiVersion: v1
 kind: Service
 metadata:

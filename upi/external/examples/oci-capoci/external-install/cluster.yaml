@@ -1,3 +1,17 @@
+# yamllint disable rule:document-start
+#
+# The disable covers the `---` SEPARATORS below, not a document-start marker:
+# this file holds several objects and the separators are structural. This
+# repository's .yamllint sets `document-start: present: false`, a rule written
+# for single-document files -- yamllint reports every `---` under it and
+# cannot tell a separator from a leading marker. The leading marker this file
+# used to carry has been removed; what is left cannot be.
+#
+# Why several objects in one file rather than one each, which is what
+# extra-manifests/ requires: this directory is NOT applied by the bootstrap
+# node. It is read by the installer's local Cluster API control plane, which
+# decodes multi-document YAML correctly (ObjectsFromManifest). The two
+# directories have genuinely different contracts.
 # Cluster API manifests for a `platform: external` install driven by CAPOCI.
 #
 # STATUS: NEVER RUN. Written 2026-09-30 from the CAPOCI type definitions, with
@@ -10,7 +24,7 @@
 # finds in its temporary local control plane, and waits for
 # Cluster.status.infrastructureReady.
 #
-# `scripts/run-create-command.sh` rewrites `CLUSTER-ID` to the run's
+# `scripts/run-create-command.sh` rewrites `CLUSTER_ID` to the run's
 # INFRASTRUCTURE ID before `create cluster`, so that token is the name
 # placeholder and must not be used for anything else. See
 # machines/README.md for why the substitution has to happen and why it forces
@@ -19,11 +33,10 @@
 # Namespace: the installer forces every object into
 # openshift-cluster-api-guests (pkg/infrastructure/clusterapi/clusterapi.go:183),
 # so these values are for readability, not load-bearing.
----
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
-  name: CLUSTER-ID
+  name: CLUSTER_ID
   namespace: openshift-cluster-api-guests
 spec:
   clusterNetwork:
@@ -34,7 +47,7 @@ spec:
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
     kind: OCICluster
-    name: CLUSTER-ID
+    name: CLUSTER_ID
     namespace: openshift-cluster-api-guests
 ---
 # Provider credentials.
@@ -59,35 +72,35 @@ spec:
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OCIClusterIdentity
 metadata:
-  name: CLUSTER-ID-identity
+  name: CLUSTER_ID-identity
   namespace: openshift-cluster-api-guests
 spec:
   type: UserPrincipal
   principalSecret:
-    name: CLUSTER-ID-oci-credentials
+    name: CLUSTER_ID-oci-credentials
     namespace: openshift-cluster-api-guests
   allowedNamespaces: {}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OCICluster
 metadata:
-  name: CLUSTER-ID
+  name: CLUSTER_ID
   namespace: openshift-cluster-api-guests
 spec:
   # Substituted by run-create-command.sh from $OCI_COMPARTMENT_ID.
-  compartmentId: COMPARTMENT-OCID
-  region: REGION
+  compartmentId: COMPARTMENT_OCID
+  region: REGION_ID
   identityRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
     kind: OCIClusterIdentity
-    name: CLUSTER-ID-identity
+    name: CLUSTER_ID-identity
     namespace: openshift-cluster-api-guests
   # One tag, for humans and for the destroy path. Nothing in OCI keys off it:
   # the OCI CCM finds load balancers by Service annotation and nodes by
   # providerID, and neither CAPOCI nor Oracle's own terraform reads a cluster
   # tag at all.
   #
-  # This block used to carry `kubernetes.io/cluster/CLUSTER-ID: owned` as well,
+  # This block used to carry `kubernetes.io/cluster/CLUSTER_ID: owned` as well,
   # with a comment asserting the CCM matched on it. Both the tag and the claim
   # were an AWS reflex. OCI rejects a free-form tag key containing "/" --
   # `oci network vcn update --freeform-tags '{"kubernetes.io/cluster/x":"y"}'`
@@ -95,17 +108,17 @@ spec:
   # very first VCN create failed and the cluster never got past Provisioning.
   # A plain key on the same VCN in the same second was accepted.
   freeformTags:
-    openshift-cluster-id: CLUSTER-ID
+    openshift-cluster-id: CLUSTER_ID
   controlPlaneEndpoint:
     host: ""
     port: 0
   networkSpec:
     vcn:
-      name: CLUSTER-ID-vcn
+      name: CLUSTER_ID-vcn
       cidr: 10.0.0.0/16
       # NOT a domain name, despite the field name. An OCI VCN dnsLabel must be
       # alphanumeric only, start with a letter, and be at most 15 characters --
-      # so no dots and no hyphens. This field was CLUSTERDNS, which the create
+      # so no dots and no hyphens. This field was CLUSTER_DNS, which the create
       # script substitutes with the full cluster domain
       # (mrb-oci1.oci.splat.devcluster.openshift.com): three invalid characters
       # and three times the length limit. run-create-command.sh now derives a
@@ -114,7 +127,7 @@ spec:
       # It only names the VCN's private *.oraclevcn.com resolver domain, which
       # OpenShift does not depend on -- api/api-int/*.apps are created by the
       # infraReady and postProvision hooks in the public zone.
-      dnsLabel: VCNDNSLABEL
+      dnsLabel: VCN_DNS_LABEL
       # Subnet names here are what machines reference by `subnetName`, so these
       # strings are a contract with machines/*.yaml. Roles are the values
       # CAPOCI accepts for an OCICluster (api/v1beta2/types.go:31):
@@ -127,15 +140,15 @@ spec:
       # has no headroom and no room for a replacement machine. Widened to /27.
       subnets:
       - role: control-plane-endpoint
-        name: CLUSTER-ID-subnet-cp-endpoint
+        name: CLUSTER_ID-subnet-cp-endpoint
         cidr: 10.0.0.0/27
         type: public
       - role: control-plane
-        name: CLUSTER-ID-subnet-control-plane
+        name: CLUSTER_ID-subnet-control-plane
         cidr: 10.0.0.32/27
         type: private
       - role: worker
-        name: CLUSTER-ID-subnet-worker
+        name: CLUSTER_ID-subnet-worker
         cidr: 10.0.64.0/20
         type: private
       # The OCI CCM creates LoadBalancer Services into this subnet, and its
@@ -145,7 +158,7 @@ spec:
       # -- CAPOCI writes the created OCID into the SPEC, not into status
       # (cloud/scope/subnet_reconciler.go, desiredSubnet.ID = subnet.Id).
       - role: service-lb
-        name: CLUSTER-ID-subnet-service-lb
+        name: CLUSTER_ID-subnet-service-lb
         cidr: 10.0.32.0/27
         type: public
       # EVERY NSG RULE, SPELLED OUT -- and it has to be.
@@ -757,21 +770,21 @@ spec:
     # path at controllers/ocicluster_controller.go:262-270. Only the literal
     # value "LB" takes the LBaaS path.
     apiServerLoadBalancer:
-      name: CLUSTER-ID-apiserver
+      name: CLUSTER_ID-apiserver
       networkVisibility: Public
-  # availabilityDomains is DELIBERATELY ABSENT.
-  #
-  # CAPOCI populates it itself: cloud/scope/cluster.go:137-141 reads the
-  # current value and, when it is empty, calls ListAvailabilityDomains against
-  # the compartment, then writes the result back with SetAvailabilityDomains
-  # at :228. Machines pick an AD from that map (cloud/scope/machine.go:510).
-  #
-  # Supplying an empty map rather than omitting the key risks being read as
-  # "zero availability domains" rather than "not specified", so the key is
-  # left out entirely.
-  #
-  # Consequence worth stating: this example does not pin machines to
-  # particular availability domains, so the three masters may or may not be
-  # spread. That matches the aws-capa example's one-AZ departure in spirit --
-  # this is a mechanism pilot, not an availability test -- but it is less
-  # deliberate. Pin ADs before drawing any HA conclusion from a run.
+# availabilityDomains is DELIBERATELY ABSENT.
+#
+# CAPOCI populates it itself: cloud/scope/cluster.go:137-141 reads the
+# current value and, when it is empty, calls ListAvailabilityDomains against
+# the compartment, then writes the result back with SetAvailabilityDomains
+# at :228. Machines pick an AD from that map (cloud/scope/machine.go:510).
+#
+# Supplying an empty map rather than omitting the key risks being read as
+# "zero availability domains" rather than "not specified", so the key is
+# left out entirely.
+#
+# Consequence worth stating: this example does not pin machines to
+# particular availability domains, so the three masters may or may not be
+# spread. That matches the aws-capa example's one-AZ departure in spirit --
+# this is a mechanism pilot, not an availability test -- but it is less
+# deliberate. Pin ADs before drawing any HA conclusion from a run.

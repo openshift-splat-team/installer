@@ -35,6 +35,7 @@ import (
 	baremetalvalidation "github.com/openshift/installer/pkg/types/baremetal/validation"
 	"github.com/openshift/installer/pkg/types/common"
 	"github.com/openshift/installer/pkg/types/external"
+	externalvalidation "github.com/openshift/installer/pkg/types/external/validation"
 	"github.com/openshift/installer/pkg/types/featuregates"
 	"github.com/openshift/installer/pkg/types/gcp"
 	gcpvalidation "github.com/openshift/installer/pkg/types/gcp/validation"
@@ -1297,6 +1298,11 @@ func validatePlatform(platform *types.Platform, usingAgentMethod bool, fldPath *
 	if platform.Nutanix != nil {
 		validate(nutanix.Name, platform.Nutanix, func(f *field.Path) field.ErrorList {
 			return nutanixvalidation.ValidatePlatform(platform.Nutanix, f, c, false)
+		})
+	}
+	if platform.External != nil {
+		validate(external.Name, platform.External, func(f *field.Path) field.ErrorList {
+			return externalvalidation.ValidatePlatform(platform.External, f)
 		})
 	}
 	return allErrs

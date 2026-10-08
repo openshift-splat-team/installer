@@ -6585,6 +6585,172 @@ spec:
                     - ""
                     - External
                     type: string
+                  clusterAPI:
+                    description: |-
+                      ClusterAPI configures a user-supplied Cluster API infrastructure provider
+                      to provision the cluster's infrastructure. When it is unset, the installer
+                      provisions nothing and the infrastructure is expected to exist already,
+                      which is the behaviour of this platform before this field was introduced.
+
+                      This is a provisional interface for the External enablement pilot and is
+                      not a supported installation API.
+                    properties:
+                      args:
+                        description: |-
+                          Args are appended to the provider controller's command line, after the
+                          arguments the installer supplies itself. Use it for flags a particular
+                          provider requires and the installer does not know about.
+                        items:
+                          type: string
+                        type: array
+                      binaryPath:
+                        description: |-
+                          BinaryPath is a path on the machine running the installer to the provider
+                          controller executable.
+
+                          Remote references -- a git repository, a container image, or a release
+                          payload -- are not supported, and neither is digest or signature pinning.
+                          Both are TBD after the pilot: the provider artifacts must already be
+                          extracted onto this machine.
+                        type: string
+                      componentsPath:
+                        description: |-
+                          ComponentsPath is a path on the machine running the installer to the
+                          provider's CRDs and component manifests, either a single YAML file or a
+                          directory of them.
+
+                          Remote references and digest pinning are TBD after the pilot, as for
+                          BinaryPath.
+                        type: string
+                      hooks:
+                        description: Hooks names programs the installer runs at fixed
+                          points in the install.
+                        properties:
+                          infraReady:
+                            description: |-
+                              InfraReady is run once the Cluster reports
+                              status.infrastructureReady, after the provider has created the network
+                              and load balancers and before any machine is created. It is the point
+                              at which the load balancer addresses first exist and the last point at
+                              which DNS can be created in time for the bootstrap node to use it.
+                            properties:
+                              args:
+                                description: |-
+                                  Args are passed to Program as its arguments, in order and verbatim.
+
+                                  Prefer long flags with an explicit value, `--input-dns-zone=Z123` or
+                                  `--input-dns-zone Z123`, over positional arguments: the reference hook
+                                  for this pilot is a script today and may be a binary tomorrow, and a
+                                  flag survives that change where a position does not.
+
+                                  These are written to the installer log and recorded in metadata.json so
+                                  that `destroy cluster` can run the teardown half of the same
+                                  automation. Do not put a credential in one.
+                                items:
+                                  type: string
+                                type: array
+                              program:
+                                description: |-
+                                  Program is a path to an executable, relative to the External manifest
+                                  directory in the install directory. It must stay inside that
+                                  directory: the install directory is the unit a user copies, archives
+                                  and hands to someone else, and a hook reaching outside it would run
+                                  something that did not travel with it.
+                                type: string
+                            required:
+                            - program
+                            type: object
+                          postProvision:
+                            description: |-
+                              PostProvision is run once the control-plane machines have been
+                              created, which is after the cluster's own API has begun serving and
+                              before the installer waits for the bootstrap to complete.
+
+                              It exists for the things that can only be named after the cluster has
+                              started building them. The motivating case is the ingress wildcard:
+                              `*.apps` has to point at a load balancer that does not exist when
+                              InfraReady runs, because on this platform nothing but the cluster's own
+                              cloud controller manager creates it, and it does so in response to a
+                              Service the cluster applies to itself. A hook here can wait for that
+                              address and publish it, which is the last thing missing before
+                              `wait-for install-complete` can succeed.
+                            properties:
+                              args:
+                                description: |-
+                                  Args are passed to Program as its arguments, in order and verbatim.
+
+                                  Prefer long flags with an explicit value, `--input-dns-zone=Z123` or
+                                  `--input-dns-zone Z123`, over positional arguments: the reference hook
+                                  for this pilot is a script today and may be a binary tomorrow, and a
+                                  flag survives that change where a position does not.
+
+                                  These are written to the installer log and recorded in metadata.json so
+                                  that `destroy cluster` can run the teardown half of the same
+                                  automation. Do not put a credential in one.
+                                items:
+                                  type: string
+                                type: array
+                              program:
+                                description: |-
+                                  Program is a path to an executable, relative to the External manifest
+                                  directory in the install directory. It must stay inside that
+                                  directory: the install directory is the unit a user copies, archives
+                                  and hands to someone else, and a hook reaching outside it would run
+                                  something that did not travel with it.
+                                type: string
+                            required:
+                            - program
+                            type: object
+                          preDestroy:
+                            description: |-
+                              PreDestroy is run by `destroy cluster` after the local control plane
+                              has been restored and before the Cluster is deleted.
+
+                              It is the counterpart of the two hooks above and exists because their
+                              resources are invisible to Cluster API: deleting the Cluster removes
+                              what the provider built and nothing else. Running before the delete
+                              rather than after is deliberate -- a DNS alias record is described in
+                              terms of the load balancer it points at, so it is cheaper to remove
+                              while that load balancer still exists.
+                            properties:
+                              args:
+                                description: |-
+                                  Args are passed to Program as its arguments, in order and verbatim.
+
+                                  Prefer long flags with an explicit value, `--input-dns-zone=Z123` or
+                                  `--input-dns-zone Z123`, over positional arguments: the reference hook
+                                  for this pilot is a script today and may be a binary tomorrow, and a
+                                  flag survives that change where a position does not.
+
+                                  These are written to the installer log and recorded in metadata.json so
+                                  that `destroy cluster` can run the teardown half of the same
+                                  automation. Do not put a credential in one.
+                                items:
+                                  type: string
+                                type: array
+                              program:
+                                description: |-
+                                  Program is a path to an executable, relative to the External manifest
+                                  directory in the install directory. It must stay inside that
+                                  directory: the install directory is the unit a user copies, archives
+                                  and hands to someone else, and a hook reaching outside it would run
+                                  something that did not travel with it.
+                                type: string
+                            required:
+                            - program
+                            type: object
+                        type: object
+                      name:
+                        description: |-
+                          Name identifies the provider, for example "oci". It names the controller
+                          in installer logs and in the developer-only artifact override
+                          environment variables.
+                        type: string
+                    required:
+                    - binaryPath
+                    - componentsPath
+                    - name
+                    type: object
                   platformName:
                     default: Unknown
                     description: |-

@@ -12,11 +12,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/vmware/govmomi/vim25/soap"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -578,24 +576,21 @@ func (c *ClusterAPI) Load(f asset.FileFetcher) (bool, error) {
 	fileList = append(fileList, jsonFileList...)
 
 	for _, file := range fileList {
-		u := &unstructured.Unstructured{}
-		if err := yaml.Unmarshal(file.Data, u); err != nil {
-			return false, errors.Wrap(err, "failed to unmarshal file")
-		}
-		obj, err := clusterapi.Scheme.New(u.GroupVersionKind())
+		decoded, err := clusterapi.ObjectsFromManifest(file.Filename, file.Data)
 		if err != nil {
-			return false, errors.Wrap(err, "failed to create object")
+			return false, err
 		}
-		if err := clusterapi.Scheme.Convert(u, obj, nil); err != nil {
-			return false, errors.Wrap(err, "failed to convert object")
+		for i, d := range decoded {
+			name := file.Filename
+			if len(decoded) > 1 {
+				ext := filepath.Ext(name)
+				name = fmt.Sprintf("%s-%d%s", strings.TrimSuffix(name, ext), i+1, ext)
+			}
+			c.FileList = append(c.FileList, &asset.RuntimeFile{
+				File:   asset.File{Filename: name, Data: d.Data},
+				Object: d.Object,
+			})
 		}
-		c.FileList = append(c.FileList, &asset.RuntimeFile{
-			File: asset.File{
-				Filename: file.Filename,
-				Data:     file.Data,
-			},
-			Object: obj.(client.Object),
-		})
 	}
 
 	asset.SortManifestFiles(c.FileList)

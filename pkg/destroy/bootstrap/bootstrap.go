@@ -75,7 +75,7 @@ func Destroy(ctx context.Context, dir string) (err error) {
 	}
 	fg := featuregates.FeatureGateFromFeatureSets(featureSets, metadata.FeatureSet, metadata.CustomFeatureSet)
 
-	provider, err := infra.ProviderForPlatform(platform, fg)
+	provider, err := infra.ProviderForPlatform(platform, nil, fg)
 	if err != nil {
 		return fmt.Errorf("error getting infrastructure provider: %w", err)
 	}

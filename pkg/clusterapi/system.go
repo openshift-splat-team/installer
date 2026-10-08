@@ -35,6 +35,7 @@ import (
 	"github.com/openshift/installer/pkg/clusterapi/internal/process/addr"
 	"github.com/openshift/installer/pkg/types/aws"
 	"github.com/openshift/installer/pkg/types/azure"
+	"github.com/openshift/installer/pkg/types/external"
 	"github.com/openshift/installer/pkg/types/gcp"
 	"github.com/openshift/installer/pkg/types/ibmcloud"
 	"github.com/openshift/installer/pkg/types/nutanix"
@@ -457,6 +458,22 @@ func (c *system) Run(ctx context.Context) error { //nolint:gocyclo
 			}
 		}
 		controllers = append(controllers, controller)
+	case external.Name:
+		// The provider is not compiled into the installer: its binary and its
+		// CRDs come from the user, resolved and validated by the External
+		// provider's PreProvision hook, which runs before this function.
+		//
+		// The destroy paths reach this function without PreProvision having
+		// run, so an unset spec is expected there rather than an error: fall
+		// back to what the install recorded in metadata.json.
+		spec := getExternalProvider()
+		if spec == nil {
+			if err := SetExternalProviderFromMetadata(metadata.External); err != nil {
+				return fmt.Errorf("no Cluster API infrastructure provider configured for the %s platform: %w", external.Name, err)
+			}
+			spec = getExternalProvider()
+		}
+		controllers = append(controllers, c.externalInfrastructureController(spec))
 	default:
 		return fmt.Errorf("unsupported platform %q", platform)
 	}
@@ -537,7 +554,16 @@ func (c *system) Teardown() {
 			logrus.Warn("Timed out waiting for local Cluster API system to shut down")
 		}
 
-		c.logWriter.Close()
+		// Only if we got far enough to create it. Run assigns logWriter well
+		// after it assigns lcp, so every failure in between reaches here with
+		// a nil writer -- and Close on a nil *io.PipeWriter panics. Teardown
+		// is registered as a logrus exit handler, so that panic surfaces as
+		// "Logrus exit handler error: invalid memory address" in place of the
+		// error that was actually being reported, which is how a failed
+		// `destroy cluster` came to look like a crash in the logger.
+		if c.logWriter != nil {
+			c.logWriter.Close()
+		}
 	})
 }
 
@@ -603,12 +629,31 @@ type controller struct {
 	Components []string
 	Args       []string
 	Env        map[string]string
+
+	// skipExtract suppresses extraction from the embedded mirror, and is set
+	// when Path already points at a validated developer-supplied binary.
+	// Provider deliberately stays non-nil: runController reads Provider.Name
+	// twice below for the azureaso kubeconfig special case.
+	skipExtract bool
 }
 
 // runController configures the controller, and waits for it to be ready.
 func (c *system) runController(ctx context.Context, ct *controller) error {
-	// If the provider is not empty, we extract it to the binaries directory.
+	// Developer-only override: when validated artifacts are supplied for this
+	// provider, use them in place of the embedded copies.
 	if ct.Provider != nil {
+		override, err := lookupArtifactOverride(ct.Provider.Name)
+		if err != nil {
+			return fmt.Errorf("failed to resolve artifact override for controller %q: %w", ct.Name, err)
+		}
+		if override != nil {
+			applyArtifactOverride(ct, override)
+		}
+	}
+
+	// If the provider is not empty, and we are not using an overridden binary,
+	// we extract it to the binaries directory.
+	if ct.Provider != nil && !ct.skipExtract {
 		if err := ct.Provider.Extract(c.lcp.BinDir); err != nil {
 			return fmt.Errorf("failed to extract provider %q: %w", ct.Name, err)
 		}
@@ -662,7 +707,14 @@ func (c *system) runController(ctx context.Context, ct *controller) error {
 		args := make([]string, 0, len(ct.Args))
 		for _, arg := range ct.Args {
 			final := new(bytes.Buffer)
-			tmpl := template.Must(template.New("arg").Funcs(funcs).Parse(arg))
+			// Not template.Must: for a user-supplied provider these strings
+			// come from install-config, so a malformed one is a user error to
+			// report, not a panic in a process that has already started etcd
+			// and the kube-apiserver.
+			tmpl, err := template.New("arg").Funcs(funcs).Parse(arg)
+			if err != nil {
+				return fmt.Errorf("failed to parse controller %q arg %q: %w", ct.Name, arg, err)
+			}
 			if err := tmpl.Execute(final, templateData); err != nil {
 				return fmt.Errorf("failed to render controller %q arg %q: %w", ct.Name, arg, err)
 			}

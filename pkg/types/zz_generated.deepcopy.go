@@ -174,6 +174,11 @@ func (in *ClusterPlatformMetadata) DeepCopyInto(out *ClusterPlatformMetadata) {
 		*out = new(nutanix.Metadata)
 		**out = **in
 	}
+	if in.External != nil {
+		in, out := &in.External, &out.External
+		*out = new(external.Metadata)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 
@@ -863,7 +868,7 @@ func (in *Platform) DeepCopyInto(out *Platform) {
 	if in.External != nil {
 		in, out := &in.External, &out.External
 		*out = new(external.Platform)
-		**out = **in
+		(*in).DeepCopyInto(*out)
 	}
 	if in.OpenStack != nil {
 		in, out := &in.OpenStack, &out.OpenStack

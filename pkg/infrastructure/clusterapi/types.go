@@ -32,6 +32,70 @@ type Provider interface {
 	PublicGatherEndpoint() GatherEndpoint
 }
 
+// ManifestValidator defines the ValidateManifests hook, which is called with
+// the Cluster API objects the installer is about to create, before any
+// provisioning has begun.
+//
+// It exists for providers whose manifests the installer does not generate. For
+// those, an empty or incomplete set of manifests is not an internal error but
+// an ordinary user mistake, and it would otherwise produce an install that
+// provisions nothing and reports no error.
+type ManifestValidator interface {
+	// ValidateManifests is called with the infrastructure and machine
+	// manifests collected for the cluster, before the local control plane is
+	// started. Machines are passed separately because for a platform whose
+	// manifests the installer does not generate, an empty machine set is
+	// itself a user mistake that would otherwise provision nothing silently.
+	ValidateManifests(infra, machines []client.Object) error
+}
+
+// UnstructuredManifestTolerator marks a provider that accepts manifests whose
+// kind this installer has no compiled-in type for.
+//
+// Only a platform whose infrastructure provider is supplied by the user can
+// legitimately reference such a kind: its CRDs are installed into the local
+// control plane from the provider's own components, so the API server can
+// serve a type this binary was never built against.
+//
+// For every compiled-in platform an unresolvable kind means a mistake -- a
+// misspelled kind, or a wrong apiVersion -- and Provision rejects it before any
+// cloud resource is created. That preserves the load-time strictness those
+// platforms have always had, which the unstructured fallback in
+// pkg/clusterapi.ObjectsFromManifest would otherwise have given up for
+// everyone.
+type UnstructuredManifestTolerator interface {
+	// TolerateUnstructuredManifests reports whether unresolved kinds are
+	// expected for this platform.
+	TolerateUnstructuredManifests() bool
+}
+
+// ManifestProvider defines the ProvideManifests hook, which lets a provider
+// contribute Cluster API objects that the installer did not generate.
+//
+// Every compiled-in platform has a manifest generator, so its objects reach
+// Provision through the manifest assets and it has no reason to implement
+// this. A platform whose infrastructure provider is supplied by the user has
+// no generator -- the installer does not know the provider's API -- so the
+// objects come from files the user wrote, read by the provider itself.
+//
+// Reading them here rather than through a WritableAsset's Load is deliberate.
+// Assets loaded from the install directory are discarded when their
+// dependencies are dirty (pkg/asset/store/store.go), which happens whenever
+// install-config.yaml is still present, so user files on that path disappear
+// with only a warning. This hook runs at Provision, after the asset graph has
+// been resolved, and is not subject to that rule.
+//
+// The objects returned are appended to those from the assets, so anything the
+// installer establishes first -- the namespace everything is created into,
+// above all -- still comes first. They are then validated and created exactly
+// like generated ones: there is a single create path for every platform.
+type ManifestProvider interface {
+	// ProvideManifests returns infrastructure and machine objects to create
+	// in addition to those produced by the manifest assets. installDir is the
+	// install directory, the root the provider resolves user paths against.
+	ProvideManifests(ctx context.Context, installDir string) (infra, machines []client.Object, err error)
+}
+
 // PreProvider defines the PreProvision hook, which is called prior to
 // CAPI infrastructure provisioning.
 type PreProvider interface {

@@ -26,8 +26,6 @@ import (
 	"github.com/openshift/installer/pkg/types/vsphere/validation"
 )
 
-//go:generate mockgen -source=./validation.go -destination=./mock/tagmanager_generated.go -package=mock
-
 // TagManager defines an interface to an implementation of the AuthorizationManager to facilitate mocking.
 type TagManager interface {
 	ListCategories(ctx context.Context) ([]string, error)

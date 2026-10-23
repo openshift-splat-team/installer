@@ -10,13 +10,13 @@ import (
 
 	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
-	"github.com/vmware/govmomi/session"
 	"github.com/vmware/govmomi/simulator"
 	"github.com/vmware/govmomi/vapi/rest"
 	vapitags "github.com/vmware/govmomi/vapi/tags"
 	"github.com/vmware/govmomi/vim25/mo"
 	vim25types "github.com/vmware/govmomi/vim25/types"
 	"go.uber.org/mock/gomock"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	"github.com/openshift/installer/pkg/asset/installconfig/vsphere/mock"
@@ -280,16 +280,7 @@ func simulatorHelper(t *testing.T, vs *mock.VSphereSimulator) (*validationContex
 		return nil, nil, nil, err
 	}
 
-	sessionMgr := session.NewManager(client)
-	userSession, err := sessionMgr.UserSession(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	username := userSession.UserName
-	validPermissionsAuthManagerClient, err := buildAuthManagerClient(ctx, t, ctrl, finder, username, nil, nil, nil)
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	validPermissionsAuthManagerClient := grantAllAuthManager(t, ctrl)
 
 	return &validationContext{
 		AuthManager: validPermissionsAuthManagerClient,
@@ -877,4 +868,38 @@ func Test_compareCurrentToTemplate(t *testing.T) {
 			hook.Reset()
 		})
 	}
+}
+
+// grantAllAuthManager returns a mock AuthorizationManager that reports every
+// privilege the installer requires as granted on any entity, for tests that
+// exercise inventory or tag validation rather than privilege gaps. Privilege
+// gaps are covered by TestPermissionValidateScenarios against fake-center.
+func grantAllAuthManager(t *testing.T, ctrl *gomock.Controller) AuthManager {
+	t.Helper()
+	authManagerClient := mock.NewMockAuthManager(ctrl)
+	authManagerMo := vim25types.ManagedObjectReference{
+		Type:  "auth-manager",
+		Value: "auth-manager",
+	}
+	authManagerClient.EXPECT().Reference().Return(authManagerMo).AnyTimes()
+
+	privileges := sets.NewString()
+	privilegeList := make([]vim25types.AuthorizationPrivilege, 0)
+	for _, group := range permissions {
+		for _, privilege := range group.Permissions {
+			if privileges.Has(privilege) {
+				continue
+			}
+			privileges.Insert(privilege)
+			privilegeList = append(privilegeList, vim25types.AuthorizationPrivilege{
+				PrivId: privilege,
+			})
+		}
+	}
+
+	authManagerClient.EXPECT().FetchUserPrivilegeOnEntities(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+		[]vim25types.UserPrivilegeResult{{Privileges: privileges.List()}}, nil).AnyTimes()
+	authManagerClient.EXPECT().Properties(gomock.Any(), authManagerMo, []string{"privilegeList"}, gomock.Any()).
+		SetArg(3, mo.AuthorizationManager{PrivilegeList: privilegeList}).AnyTimes()
+	return authManagerClient
 }

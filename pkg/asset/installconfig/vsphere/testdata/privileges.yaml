@@ -1,0 +1,54 @@
+vcenter:
+  version: "8.0.2"
+failureDomains:
+- name: fd-ok
+- name: fd-portgroup
+- name: fd-cluster
+- name: fd-resourcepool
+- name: fd-datastore
+- name: fd-datacenter
+- name: fd-folder
+- name: fd-objectattachable
+- name: fd-no-cluster
+- name: fd-no-datacenter
+- name: fd-no-folder
+accounts:
+- name: installer
+  grants:
+  - role: openshift-installer
+    on: [fd-ok]
+  - role: openshift-installer
+    missing: [Network.Assign]
+    on: [fd-portgroup]
+  - role: openshift-installer
+    missing: [VApp.AssignResourcePool]
+    on: [fd-cluster]
+  - role: openshift-installer
+    missing: [VApp.AssignResourcePool]
+    on: [fd-resourcepool]
+  - role: openshift-installer
+    missing: [Datastore.AllocateSpace]
+    on: [fd-datastore]
+  - role: openshift-installer
+    missing: [Folder.Delete]
+    on: [fd-datacenter]
+  - role: openshift-installer
+    missing: [VirtualMachine.Provisioning.DeployTemplate]
+    on: [fd-folder]
+  - role: openshift-installer
+    missing: [InventoryService.Tagging.ObjectAttachable]
+    on: [fd-objectattachable]
+  - role: openshift-installer
+    without: [cluster]
+    on: [fd-no-cluster]
+  - role: openshift-installer
+    without: [datacenter]
+    on: [fd-no-datacenter]
+  - role: openshift-installer
+    without: [folder]
+    on: [fd-no-folder]
+- name: no-storageprofile
+  grants:
+  - role: openshift-installer
+    missing: [StorageProfile.View]
+    on: ["*"]

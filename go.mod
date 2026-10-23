@@ -155,7 +155,10 @@ require (
 
 require github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute v1.0.0
 
-require github.com/k-orc/openstack-resource-controller/v2 v2.4.0
+require (
+	github.com/k-orc/openstack-resource-controller/v2 v2.4.0
+	github.com/openshift-splat-team/fake-center/helper v0.1.0
+)
 
 require (
 	cel.dev/expr v0.25.2 // indirect

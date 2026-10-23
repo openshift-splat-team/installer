@@ -1,0 +1,263 @@
+// Copyright 2026 The fake-center Authors.
+// SPDX-License-Identifier: Apache-2.0
+
+// Package fakecenter launches isolated fake-center containers for tests.
+package fakecenter
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/tls"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"regexp"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+// AccountRef contains credentials for a scenario account.
+type AccountRef struct{ Username, Password string }
+
+// VCenter describes a running fake-center instance. Server normally has no port
+// suffix (HTTPS port 443). If the runtime cannot publish a privileged port, Start
+// logs a fidelity warning and Server includes an ephemeral high port instead.
+type VCenter struct {
+	Server   string
+	CABundle []byte
+	Accounts []AccountRef
+}
+
+// Account looks up credentials by account name.
+func (v *VCenter) Account(name string) (AccountRef, bool) {
+	for _, account := range v.Accounts {
+		if account.Username == name {
+			return account, true
+		}
+	}
+	return AccountRef{}, false
+}
+
+// Start launches a container from scenarioPath and registers its cleanup with
+// tb. FAKE_CENTER_IMAGE overrides the default image; FAKE_CENTER_STARTUP_TIMEOUT
+// accepts a Go duration (default 120s), including time spent pulling the image.
+func Start(tb testing.TB, scenarioPath string) (*VCenter, error) {
+	tb.Helper()
+	runtime, err := detectRuntime()
+	if err != nil {
+		return nil, err
+	}
+	client := newHTTPClient()
+	tb.Cleanup(client.CloseIdleConnections)
+	return startWithRuntime(tb, scenarioPath, runtime, client)
+}
+
+func newHTTPClient() *http.Client {
+	return &http.Client{Transport: &http.Transport{
+		// The instance CA is not known until /ca.pem has been fetched.
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+	}, Timeout: 5 * time.Second}
+}
+
+var invalidNameChars = regexp.MustCompile(`[^a-z0-9-]+`)
+
+func containerName(testName string) (string, error) {
+	var suffix [2]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return "", fmt.Errorf("generate container name: %w", err)
+	}
+	name := strings.Trim(invalidNameChars.ReplaceAllString(strings.ToLower(testName), "-"), "-")
+	return "fake-center-" + name + "-" + hex.EncodeToString(suffix[:]), nil
+}
+
+func startWithRuntime(tb testing.TB, scenarioPath string, runtime runner, client *http.Client) (*VCenter, error) {
+	scenario, err := os.ReadFile(scenarioPath)
+	if err != nil {
+		return nil, fmt.Errorf("read scenario: %w", err)
+	}
+	timeout := 120 * time.Second
+	if value := os.Getenv("FAKE_CENTER_STARTUP_TIMEOUT"); value != "" {
+		timeout, err = time.ParseDuration(value)
+		if err != nil || timeout <= 0 {
+			return nil, fmt.Errorf("FAKE_CENTER_STARTUP_TIMEOUT must be a positive Go duration, got %q", value)
+		}
+	}
+	ip, err := allocLoopback()
+	if err != nil {
+		return nil, err
+	}
+	fallbackUsed := false
+	for attempt := 0; attempt < 2; attempt++ {
+		name, err := containerName(tb.Name())
+		if err != nil {
+			releaseLoopback(ip)
+			return nil, err
+		}
+		// Capture this attempt, not the next IP selected after a collision.
+		containerIP := ip
+		var once sync.Once
+		cleanup := func() {
+			once.Do(func() {
+				if tb.Failed() {
+					logs, logErr := containerLogs(runtime, name)
+					tb.Log(logs)
+					if logErr != nil {
+						tb.Log(logErr)
+					}
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				if _, err := runtime.run(ctx, "rm", "-f", name); err != nil {
+					tb.Log("remove fake-center container: ", err)
+				}
+				releaseLoopback(containerIP)
+			})
+		}
+		tb.Cleanup(cleanup)
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		launchOutput, launchErr := runtime.run(ctx, buildRunArgs(ip, name, scenario)...)
+		server := "https://" + ip
+		if launchErr != nil && !fallbackUsed && isPublishPermission(launchOutput+"\n"+launchErr.Error()) {
+			fallbackUsed = true
+			tb.Log("WARNING: falling back to an ephemeral high port; degraded 443 fidelity means component port-handling bugs won't be caught locally in this mode. For strict local 443, run once: sudo sysctl -w net.ipv4.ip_unprivileged_port_start=0")
+			// A failed publish can leave a named container behind. Keep the IP
+			// reserved and remove that container before the single fallback launch.
+			output, removeErr := runtime.run(ctx, "rm", "-f", name)
+			if removeErr != nil && !strings.Contains(strings.ToLower(output+removeErr.Error()), "no such container") {
+				launchErr = fmt.Errorf("remove failed port-443 container: %w", removeErr)
+			} else {
+				// An omitted host port requests an ephemeral port in both
+				// runtimes; podman rejects an explicit host port of zero.
+				launchOutput, launchErr = runtime.run(ctx, buildRunArgsPort(ip, name, scenario, "")...)
+				if launchErr == nil {
+					server, launchErr = publishedServer(ctx, runtime, name, ip)
+				}
+			}
+		}
+		launchCollision := launchErr != nil && (isPublishCollision(launchOutput) || isPublishCollision(launchErr.Error()))
+		err = launchErr
+		var v *VCenter
+		if err == nil {
+			v, err = waitForVCenter(ctx, client, server)
+		}
+		if err == nil {
+			cancel()
+			if trustErr := trustInstanceCA(v.CABundle); trustErr != nil {
+				cleanup()
+				return nil, fmt.Errorf("install instance CA into process trust: %w", trustErr)
+			}
+			return v, nil
+		}
+		// exec errors need not wrap the context error when the deadline kills
+		// the runtime (for example, while pulling an image).
+		timedOut := errors.Is(err, context.DeadlineExceeded) || ctx.Err() == context.DeadlineExceeded
+		cancel()
+		logs, logErr := containerLogs(runtime, name)
+		publishCollision := launchCollision || (timedOut && isPublishCollision(logs))
+		const maxTail = 16 * 1024
+		if len(logs) > maxTail {
+			logs = logs[len(logs)-maxTail:]
+		}
+		startupErr := fmt.Errorf("start fake-center %s: %w; container log tail:\n%s", name, err, logs)
+		if logErr != nil {
+			startupErr = fmt.Errorf("%w\nread container logs: %v", startupErr, logErr)
+		}
+		if attempt == 0 && publishCollision && !fallbackUsed {
+			// Reserve the next address while the failed one is still held.
+			nextIP, allocErr := allocLoopback()
+			cleanup()
+			if allocErr != nil {
+				return nil, fmt.Errorf("%w; retry allocation: %v", startupErr, allocErr)
+			}
+			ip = nextIP
+			continue
+		}
+		cleanup()
+		return nil, startupErr
+	}
+	panic("unreachable")
+}
+
+func isPublishPermission(output string) bool {
+	output = strings.ToLower(output)
+	permission := strings.Contains(output, "permission denied") ||
+		strings.Contains(output, "can't assign requested address") ||
+		strings.Contains(output, "operation not permitted") ||
+		strings.Contains(output, "cannot expose privileged port")
+	bind := strings.Contains(output, "bind") || strings.Contains(output, "listen") ||
+		strings.Contains(output, "privileged port")
+	return permission && bind && !isPublishCollision(output)
+}
+
+func isPublishCollision(output string) bool {
+	output = strings.ToLower(output)
+	return strings.Contains(output, "address already in use") ||
+		strings.Contains(output, "port is already allocated") ||
+		strings.Contains(output, "port is already in use")
+}
+
+func containerLogs(runtime runner, name string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return runtime.run(ctx, "logs", name)
+}
+
+func waitForVCenter(ctx context.Context, client *http.Client, server string) (*VCenter, error) {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if _, err := get(ctx, client, server+"/healthz"); err == nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("wait for /healthz: %w", ctx.Err())
+		case <-ticker.C:
+		}
+	}
+	ca, err := get(ctx, client, server+"/ca.pem")
+	if err != nil {
+		return nil, err
+	}
+	data, err := get(ctx, client, server+"/accounts.json")
+	if err != nil {
+		return nil, err
+	}
+	var accounts []struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(data, &accounts); err != nil {
+		return nil, fmt.Errorf("decode /accounts.json: %w", err)
+	}
+	v := &VCenter{Server: server, CABundle: ca}
+	for _, account := range accounts {
+		v.Accounts = append(v.Accounts, AccountRef{Username: account.Name, Password: "fake-center"})
+	}
+	return v, nil
+}
+
+func get(ctx context.Context, client *http.Client, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET %s: %s", url, resp.Status)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("GET %s: %w", url, err)
+	}
+	return data, nil
+}

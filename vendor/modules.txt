@@ -1318,6 +1318,9 @@ github.com/opencontainers/image-spec/specs-go/v1
 # github.com/opencontainers/runtime-spec v1.2.1
 ## explicit
 github.com/opencontainers/runtime-spec/specs-go
+# github.com/openshift-splat-team/fake-center/helper v0.1.0
+## explicit; go 1.25.0
+github.com/openshift-splat-team/fake-center/helper
 # github.com/openshift/api v0.0.0-20261014151937-8c03d1c4218d
 ## explicit; go 1.26.0
 github.com/openshift/api/annotations

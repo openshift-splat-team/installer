@@ -23,11 +23,6 @@ type AuthManager interface {
 	Reference() vim25types.ManagedObjectReference
 }
 
-// SessionManager defines an interface to an implementation of the SessionManager to facilitate mocking.
-type SessionManager interface {
-	UserSession(ctx context.Context) (*vim25types.UserSession, error)
-}
-
 // permissionGroup is the group of permissions needed by cluster creation, operation, or teardown.
 type permissionGroup string
 

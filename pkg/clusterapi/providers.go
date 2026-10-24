@@ -41,7 +41,7 @@ var (
 	// The AzureStack provider is maintained in an OpenShift fork of CAPZ.
 	AzureStack = infrastructureProvider("azurestack")
 	// AzureASO is a companion component to Azure that is used to create resources declaratively.
-	AzureASO = infrastructureProvider("azureaso")
+	AzureASO = companionComponent("azureaso")
 	// GCP is the provider for creating resources in GCP.
 	GCP = infrastructureProvider("gcp")
 	// IBMCloud is the provider for creating resources in IBM Cloud and powervs.
@@ -51,7 +51,7 @@ var (
 	// OpenStack is the provider for creating resources in OpenStack.
 	OpenStack = infrastructureProvider("openstack")
 	// OpenStackORC is a companion component to OpenStack that is used to create resources declaratively.
-	OpenStackORC = infrastructureProvider("openstackorc")
+	OpenStackORC = companionComponent("openstackorc")
 	// VSphere is the provider for creating resources in vSphere.
 	VSphere = infrastructureProvider("vsphere")
 )
@@ -64,8 +64,45 @@ type Provider struct {
 	Sources sets.Set[string]
 }
 
+var (
+	// infrastructureProviders holds every provider that can serve as a
+	// platform's infrastructure provider on its own, keyed by name.
+	//
+	// It is populated as a side effect of infrastructureProvider rather than
+	// written out a second time, so that it cannot drift from the provider
+	// variables above. This is safe despite being package-level state: the
+	// initialization expression for each provider variable references
+	// infrastructureProvider, whose body references this map, and Go's
+	// initialization dependency analysis follows references through function
+	// bodies -- so the map is initialized before the first call.
+	infrastructureProviders = map[string]Provider{}
+
+	// companionComponents holds the components that run alongside an
+	// infrastructure provider rather than in place of one. Kept separate so
+	// that asking for one by name can say what it actually is.
+	companionComponents = map[string]Provider{}
+)
+
 // infrastructureProvider configures a infrastructureProvider built locally.
 func infrastructureProvider(name string) Provider {
+	p := newProvider(name)
+	infrastructureProviders[name] = p
+	return p
+}
+
+// companionComponent configures a component that is started alongside an
+// infrastructure provider and never on its own: AzureASO accompanies Azure
+// (system.go:277) and OpenStackORC accompanies OpenStack (:403). It is built,
+// extracted and run exactly like an infrastructure provider, which is why it
+// shares the artifact naming; it is tracked separately because a platform
+// cannot be provisioned by one.
+func companionComponent(name string) Provider {
+	p := newProvider(name)
+	companionComponents[name] = p
+	return p
+}
+
+func newProvider(name string) Provider {
 	return Provider{
 		Name: name,
 		Sources: sets.New(

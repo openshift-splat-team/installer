@@ -132,7 +132,7 @@ func runGatherBootstrapCmd(ctx context.Context, directory string) (string, error
 			return "", fmt.Errorf("failed to fetch %s: %w", config.Name(), err)
 		}
 
-		provider, err := infra.ProviderForPlatform(config.Config.Platform.Name(), config.Config.EnabledFeatureGates())
+		provider, err := infra.ProviderForPlatform(config.Config.Platform.Name(), config.Config, config.Config.EnabledFeatureGates())
 		if err != nil {
 			return "", fmt.Errorf("error getting infrastructure provider: %w", err)
 		}

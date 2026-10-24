@@ -135,7 +135,20 @@ func (t *TerraformVariables) Generate(ctx context.Context, parents asset.Parents
 
 	platform := installConfig.Config.Platform.Name()
 	switch platform {
-	case external.Name, none.Name:
+	case external.Name:
+		// An External install that supplies a Cluster API provider provisions
+		// through that provider, which reads none of this: the installer does
+		// not know the provider's API and generates no Terraform for it. The
+		// Cluster asset depends on this one, so the asset has to succeed while
+		// producing nothing rather than refuse to generate.
+		//
+		// Without a Cluster API provider, External is user-provisioned as it
+		// has always been, and the error below is the one it has always given.
+		if installConfig.Config.Platform.External.ProvisionsWithClusterAPI() {
+			return nil
+		}
+		return errors.Errorf("cannot create the cluster because %q is a UPI platform", platform)
+	case none.Name:
 		return errors.Errorf("cannot create the cluster because %q is a UPI platform", platform)
 	}
 

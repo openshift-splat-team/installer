@@ -5,6 +5,7 @@ import (
 	"github.com/openshift/installer/pkg/types/aws"
 	"github.com/openshift/installer/pkg/types/azure"
 	"github.com/openshift/installer/pkg/types/baremetal"
+	"github.com/openshift/installer/pkg/types/external"
 	"github.com/openshift/installer/pkg/types/gcp"
 	"github.com/openshift/installer/pkg/types/ibmcloud"
 	"github.com/openshift/installer/pkg/types/nutanix"
@@ -42,6 +43,7 @@ type ClusterPlatformMetadata struct {
 	PowerVS   *powervs.Metadata   `json:"powervs,omitempty"`
 	VSphere   *vsphere.Metadata   `json:"vsphere,omitempty"`
 	Nutanix   *nutanix.Metadata   `json:"nutanix,omitempty"`
+	External  *external.Metadata  `json:"external,omitempty"`
 }
 
 // Platform returns a string representation of the platform
@@ -83,6 +85,9 @@ func (cpm *ClusterPlatformMetadata) Platform() string {
 	}
 	if cpm.Nutanix != nil {
 		return nutanix.Name
+	}
+	if cpm.External != nil {
+		return external.Name
 	}
 	return ""
 }

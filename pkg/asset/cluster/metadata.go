@@ -12,6 +12,7 @@ import (
 	"github.com/openshift/installer/pkg/asset/cluster/aws"
 	"github.com/openshift/installer/pkg/asset/cluster/azure"
 	"github.com/openshift/installer/pkg/asset/cluster/baremetal"
+	"github.com/openshift/installer/pkg/asset/cluster/external"
 	"github.com/openshift/installer/pkg/asset/cluster/gcp"
 	"github.com/openshift/installer/pkg/asset/cluster/ibmcloud"
 	clustermetadata "github.com/openshift/installer/pkg/asset/cluster/metadata"
@@ -107,7 +108,17 @@ func (m *Metadata) Generate(_ context.Context, parents asset.Parents) (err error
 		if err != nil {
 			return fmt.Errorf("failed to initialize PowerVS: %w", err)
 		}
-	case externaltypes.Name, nonetypes.Name:
+	case externaltypes.Name:
+		// Only recorded when a Cluster API provider was asked to provision the
+		// infrastructure. Platform() reports "external" as soon as this member
+		// is set, and nothing destroys External infrastructure yet, so writing
+		// it unconditionally would change the destroy behaviour of every
+		// existing External install -- which provisions nothing and has
+		// nothing to record.
+		if installConfig.Config.Platform.External.ProvisionsWithClusterAPI() {
+			metadata.ClusterPlatformMetadata.External = external.Metadata(installConfig.Config)
+		}
+	case nonetypes.Name:
 	case nutanixtypes.Name:
 		metadata.ClusterPlatformMetadata.Nutanix = nutanix.Metadata(installConfig.Config)
 	default:

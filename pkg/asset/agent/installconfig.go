@@ -486,6 +486,17 @@ func warnUnusedConfig(installConfig *types.InstallConfig) {
 
 	switch installConfig.Platform.Name() {
 
+	case external.Name:
+		// The agent-based method provisions no infrastructure: the hosts are
+		// already running when assisted-service takes over, so the installer
+		// never starts a Cluster API control plane and never runs the
+		// provider. Warn rather than error, so that one install-config can be
+		// shared between the two methods.
+		if installConfig.Platform.External.ClusterAPI != nil {
+			logrus.Warnf("%s is ignored: the agent-based installation method does not provision infrastructure with Cluster API",
+				field.NewPath("platform", "external", "clusterAPI"))
+		}
+
 	case baremetal.Name:
 		defaultIc := &types.InstallConfig{Platform: types.Platform{BareMetal: &baremetal.Platform{}}}
 		baremetaldefaults.SetPlatformDefaults(defaultIc.Platform.BareMetal, defaultIc)

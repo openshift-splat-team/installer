@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,7 +21,9 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	utilkubeconfig "sigs.k8s.io/cluster-api/util/kubeconfig"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/installer/cmd/openshift-install/command"
 	"github.com/openshift/installer/pkg/asset"
 	"github.com/openshift/installer/pkg/asset/cluster/metadata"
 	"github.com/openshift/installer/pkg/asset/cluster/tfvars"
@@ -104,17 +105,10 @@ func (i *InfraProvider) Provision(ctx context.Context, dir string, parents asset
 		rootCA,
 	)
 
-	var capiClusters []*clusterv1.Cluster
-
 	// Collect cluster and non-machine-related infra manifests
 	// to be applied during the initial stage.
 	infraManifests := []client.Object{}
 	for _, m := range capiManifestsAsset.RuntimeFiles() {
-		// Check for cluster definition so that we can collect the names.
-		if cluster, ok := m.Object.(*clusterv1.Cluster); ok {
-			capiClusters = append(capiClusters, cluster)
-		}
-
 		infraManifests = append(infraManifests, m.Object)
 	}
 
@@ -123,6 +117,52 @@ func (i *InfraProvider) Provision(ctx context.Context, dir string, parents asset
 	machineManifests := []client.Object{}
 	for _, m := range capiMachinesAsset.RuntimeFiles() {
 		machineManifests = append(machineManifests, m.Object)
+	}
+
+	// A platform whose manifests the installer does not generate supplies
+	// them here. Appending keeps the objects the installer established
+	// first -- the namespace everything is created into -- ahead of the
+	// user's, and everything below treats both sources identically.
+	if mp, ok := i.impl.(ManifestProvider); ok {
+		extraInfra, extraMachines, err := mp.ProvideManifests(ctx, command.RootOpts.Dir)
+		if err != nil {
+			return fileList, fmt.Errorf("failed to load the Cluster API manifests for the %s provider: %w", i.impl.Name(), err)
+		}
+		infraManifests = append(infraManifests, extraInfra...)
+		machineManifests = append(machineManifests, extraMachines...)
+	}
+
+	// Collect the cluster names once every source has contributed: the
+	// installer waits on these for infrastructure readiness, so a Cluster
+	// missed here would be created and then never waited for.
+	var capiClusters []*clusterv1.Cluster
+	for _, m := range infraManifests {
+		if cluster, ok := m.(*clusterv1.Cluster); ok {
+			capiClusters = append(capiClusters, cluster)
+		}
+	}
+
+	// Reject kinds this installer has no type for, unless the platform's
+	// provider is user-supplied and so legitimately uses them. This runs
+	// before PreProvision, so it is before any cloud resource exists.
+	tolerate := false
+	if t, ok := i.impl.(UnstructuredManifestTolerator); ok {
+		tolerate = t.TolerateUnstructuredManifests()
+	}
+	if !tolerate {
+		for _, m := range append(append([]client.Object{}, infraManifests...), machineManifests...) {
+			if u, ok := m.(*unstructured.Unstructured); ok {
+				return fileList, fmt.Errorf("manifest %s/%s declares kind %s, which is not known to this installer: "+
+					"check the kind and apiVersion in the %q directory",
+					u.GetNamespace(), u.GetName(), u.GroupVersionKind(), capiutils.ManifestDir)
+			}
+		}
+	}
+
+	if v, ok := i.impl.(ManifestValidator); ok {
+		if err := v.ValidateManifests(infraManifests, machineManifests); err != nil {
+			return fileList, fmt.Errorf("invalid Cluster API manifests: %w", err)
+		}
 	}
 
 	if p, ok := i.impl.(PreProvider); ok {
@@ -275,6 +315,24 @@ func (i *InfraProvider) Provision(ctx context.Context, dir string, parents asset
 		timer.StopTimer(infrastructureReadyStage)
 	} else {
 		logrus.Debugf("No infrastructure ready requirements for the %s provider", i.impl.Name())
+	}
+
+	// Developer aid: stop once the infrastructure is ready, before any
+	// machine is created.
+	//
+	// Bringing up a Cluster API provider the installer was never compiled
+	// against is iterative, and the network infrastructure is where almost
+	// all of that iteration happens. Stopping here keeps each attempt to the
+	// cost of a network rather than a control plane, and leaves the
+	// infrastructure in place to be inspected.
+	//
+	// It aborts the install, and says so: the cluster is not created, the
+	// command fails, and nothing cleans up after it. The resources are the
+	// operator's to remove.
+	if v, ok := os.LookupEnv("OPENSHIFT_INSTALL_INFRASTRUCTURE_ONLY"); ok && v != "" {
+		logrus.Warn("OPENSHIFT_INSTALL_INFRASTRUCTURE_ONLY is set: stopping after infrastructure ready.")
+		logrus.Warn("No machines were created and no cluster was installed. Provisioned infrastructure is left in place and must be removed manually.")
+		return fileList, fmt.Errorf("stopped after infrastructure ready because OPENSHIFT_INSTALL_INFRASTRUCTURE_ONLY is set")
 	}
 
 	masterIgnData := masterIgnAsset.Files()[0].Data
@@ -436,13 +494,23 @@ func (i *InfraProvider) DestroyBootstrap(ctx context.Context, dir string) error 
 
 	machineName := capiutils.GenerateBoostrapMachineName(metadata.InfraID)
 	machineNamespace := capiutils.Namespace
+	// A missing bootstrap machine is not an error. This step is reached both
+	// from `destroy bootstrap` and from the ordinary `create cluster` flow, so
+	// it runs again on a re-run after an interrupted destroy, and it runs at
+	// all on an install that never created a bootstrap machine -- which is the
+	// case for platform: external, where the installer generates no machine
+	// manifests (pkg/asset/machines/clusterapi.go) and the user may supply
+	// none. Treating absence as failure aborts an otherwise complete install
+	// after the cluster is already up.
 	if err := sys.Client().Delete(ctx, &clusterv1.Machine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machineName,
 			Namespace: machineNamespace,
 		},
-	}); err != nil {
+	}); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("failed to delete bootstrap machine: %w", err)
+	} else if err != nil {
+		logrus.Debugf("No bootstrap machine %s/%s to delete", machineNamespace, machineName)
 	}
 
 	machineDeletionTimeout := 5 * time.Minute
@@ -485,10 +553,13 @@ func (i *InfraProvider) DestroyBootstrap(ctx context.Context, dir string) error 
 	return nil
 }
 
+// machineManifest reads back the files collectManifests wrote. The tags are
+// json because sigs.k8s.io/yaml routes through json, so both ends of that
+// round trip agree by construction rather than by coincidence.
 type machineManifest struct {
 	Status struct {
-		Addresses []clusterv1.MachineAddress `yaml:"addresses"`
-	} `yaml:"status"`
+		Addresses []clusterv1.MachineAddress `json:"addresses"`
+	} `json:"status"`
 }
 
 // extractIPAddress extracts the IP address from a machine manifest file in a
@@ -629,6 +700,13 @@ func (i *InfraProvider) collectManifests(ctx context.Context, cl client.Client) 
 		}
 
 		fileName := filepath.Join(clusterapi.ArtifactsDir, fmt.Sprintf("%s-%s-%s.yaml", gvk.Kind, m.GetNamespace(), m.GetName()))
+
+		// A typed object read back through the client has an empty TypeMeta,
+		// so the apiVersion and kind have to be restored explicitly. Without
+		// them the file is not a manifest: nothing can tell what it describes,
+		// and it cannot be re-applied.
+		m.GetObjectKind().SetGroupVersionKind(gvk)
+
 		objData, err := yaml.Marshal(m)
 		if err != nil {
 			errorList = append(errorList, fmt.Errorf("failed to marshal manifest %s: %w", fileName, err))
@@ -644,14 +722,23 @@ func (i *InfraProvider) collectManifests(ctx context.Context, cl client.Client) 
 
 func checkMachineReady(machine *clusterv1.Machine, requirePublicIP bool) (bool, error) {
 	logrus.Debugf("Checking that machine %s has provisioned...", machine.Name)
+	// Failed is checked before the not-yet-provisioned case, not after it.
+	// Failed is neither Provisioned nor Running, so testing it second made the
+	// branch unreachable and turned every provisioning failure into a silent
+	// fifteen-minute timeout with the provider's own explanation discarded.
+	// A CAPI machine reaches Failed only once FailureReason/FailureMessage is
+	// set, which the contract defines as terminal, so there is nothing to wait
+	// for. This matters most for platform: external, where the provider's
+	// FailureMessage is the only account of the failure the installer has.
+	if machine.Status.Phase == string(clusterv1.MachinePhaseFailed) {
+		//TODO: We need to update this to use non deprecated field
+		msg := ptr.Deref(machine.Status.FailureMessage, "machine.Status.FailureMessage was not set") //nolint:staticcheck
+		return false, fmt.Errorf("machine %s failed to provision: %s", machine.Name, msg)
+	}
 	if machine.Status.Phase != string(clusterv1.MachinePhaseProvisioned) &&
 		machine.Status.Phase != string(clusterv1.MachinePhaseRunning) {
 		logrus.Debugf("Machine %s has not yet provisioned: %s", machine.Name, machine.Status.Phase)
 		return false, nil
-	} else if machine.Status.Phase == string(clusterv1.MachinePhaseFailed) {
-		//TODO: We need to update this to use non deprecated field
-		msg := ptr.Deref(machine.Status.FailureMessage, "machine.Status.FailureMessage was not set") //nolint:staticcheck
-		return false, fmt.Errorf("machine %s failed to provision: %s", machine.Name, msg)
 	}
 	logrus.Debugf("Machine %s has status: %s", machine.Name, machine.Status.Phase)
 	return hasRequiredIP(machine, requirePublicIP), nil
